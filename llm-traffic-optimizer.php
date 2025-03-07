@@ -7,14 +7,46 @@
  * License: GPL v2 or later
  */
 
+// エラーログを有効化
+@ini_set('display_errors', 1);
+@ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// デバッグログファイル
+define('LTO_DEBUG_LOG', true);
+function lto_debug_log($message) {
+    if (defined('LTO_DEBUG_LOG') && LTO_DEBUG_LOG) {
+        error_log(print_r($message, true));
+    }
+}
+
 // PHP 7 互換性チェック
 if (version_compare(PHP_VERSION, '7.0.0', '<')) {
-    function lto_php_version_error() {
-        echo '<div class="error"><p>LLM Traffic Optimizer requires PHP 7.0 or higher. Your current PHP version is ' . PHP_VERSION . '. Please upgrade PHP or contact your hosting provider.</p></div>';
+    // プラグインをすぐに停止
+    if (!function_exists('lto_php_version_error')) {
+        function lto_php_version_error() {
+            echo '<div class="error"><p>LLM Traffic Optimizer requires PHP 7.0 or higher. Your current PHP version is ' . PHP_VERSION . '. Please upgrade PHP or contact your hosting provider.</p></div>';
+        }
     }
     add_action('admin_notices', 'lto_php_version_error');
+    
+    // プラグインを自動的に無効化
+    require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+    deactivate_plugins(plugin_basename(__FILE__));
+    
+    // アクティベーションエラーをトリガー（リダイレクト）
+    if (isset($_GET['activate'])) {
+        unset($_GET['activate']);
+        add_action('admin_notices', function() {
+            echo '<div class="error"><p>LLM Traffic Optimizer was deactivated due to PHP version incompatibility.</p></div>';
+        });
+    }
+    
     return;
 }
+
+// PHPのバージョン情報をログに記録
+lto_debug_log('PHP Version: ' . PHP_VERSION);
 
 // Make sure we don't expose any info if called directly
 if (!function_exists('add_action')) {
@@ -22,17 +54,53 @@ if (!function_exists('add_action')) {
     exit;
 }
 
+// WordPressコア関数の依存確認
+$required_wp_functions = ['add_action', 'add_filter', 'get_option', 'update_option', 'wp_enqueue_script', 'wp_enqueue_style'];
+$missing_functions = [];
+
+foreach ($required_wp_functions as $function) {
+    if (!function_exists($function)) {
+        $missing_functions[] = $function;
+    }
+}
+
+if (!empty($missing_functions)) {
+    lto_debug_log('Missing WordPress core functions: ' . implode(', ', $missing_functions));
+    
+    // 管理画面で警告を表示
+    add_action('admin_notices', function() use ($missing_functions) {
+        echo '<div class="error"><p>LLM Traffic Optimizer: Missing WordPress core functions: ' . implode(', ', $missing_functions) . '</p></div>';
+    });
+}
+
 // Define constants
 define('LTO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LTO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LTO_VERSION', '1.0');
 
-// Include required files
-require_once(LTO_PLUGIN_DIR . 'includes/admin-menu.php');
-require_once(LTO_PLUGIN_DIR . 'includes/openai-integration.php');
-require_once(LTO_PLUGIN_DIR . 'includes/summary-generator.php');
-require_once(LTO_PLUGIN_DIR . 'includes/llms-txt-generator.php');
-require_once(LTO_PLUGIN_DIR . 'includes/analytics-tracker.php');
+// Include required files with error handling
+$required_files = [
+    'includes/openai-integration.php',
+    'includes/llms-txt-generator.php',
+    'includes/summary-generator.php',
+    'includes/analytics-tracker.php',
+    'includes/admin-menu.php'
+];
+
+foreach ($required_files as $file) {
+    $file_path = LTO_PLUGIN_DIR . $file;
+    if (file_exists($file_path)) {
+        try {
+            require_once($file_path);
+            lto_debug_log("Loaded file: " . $file);
+        } catch (Exception $e) {
+            lto_debug_log("Error loading file " . $file . ": " . $e->getMessage());
+            // エラーが発生しても処理を続行
+        }
+    } else {
+        lto_debug_log("File does not exist: " . $file_path);
+    }
+}
 
 // Display admin notice if OpenAI API key is missing
 function lto_admin_notice_missing_api_key() {
@@ -111,16 +179,33 @@ add_action('lto_generate_initial_files', 'lto_generate_initial_files_callback');
 
 function lto_generate_initial_files_callback() {
     try {
+        lto_debug_log('Starting initial files generation');
+        
+        // 関数が存在するか確認
+        if (!function_exists('lto_generate_llms_txt')) {
+            lto_debug_log('Function lto_generate_llms_txt does not exist');
+            return;
+        }
+        
         // Create required files
         if (!file_exists(ABSPATH . 'llms.txt')) {
+            lto_debug_log('Generating llms.txt');
             lto_generate_llms_txt();
         }
 
+        if (!function_exists('lto_generate_llms_full_txt')) {
+            lto_debug_log('Function lto_generate_llms_full_txt does not exist');
+            return;
+        }
+        
         if (!file_exists(ABSPATH . 'llms-full.txt')) {
+            lto_debug_log('Generating llms-full.txt');
             lto_generate_llms_full_txt();
         }
+        
+        lto_debug_log('Completed initial files generation');
     } catch (Exception $e) {
-        error_log('Failed to generate LLMS files: ' . $e->getMessage());
+        lto_debug_log('Failed to generate LLMS files: ' . $e->getMessage());
     }
 }
 
