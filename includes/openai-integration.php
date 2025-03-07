@@ -1,4 +1,9 @@
+
 <?php
+/**
+ * OpenAI API統合機能
+ */
+
 if (!defined('ABSPATH')) {
     exit; // 直接アクセス禁止
 }
@@ -68,19 +73,9 @@ function lto_openai_api_request($prompt) {
 }
 
 // APIキーの検証関数
-function lto_validate_api_key() {
-    // セキュリティチェック
-    if (!check_ajax_referer('lto_validate_api_key_nonce', 'nonce', false)) {
-        wp_send_json_error('セキュリティチェックに失敗しました');
-        return;
-    }
-
-    // POSTからAPIキーを取得
-    $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
-
+function lto_validate_api_key($api_key) {
     if (empty($api_key)) {
-        wp_send_json_error('APIキーが空です');
-        return;
+        return new WP_Error('empty_api_key', __('API key cannot be empty', 'llm-traffic-optimizer'));
     }
 
     // 簡単なリクエストでAPIキーの有効性をチェック
@@ -104,40 +99,92 @@ function lto_validate_api_key() {
 
     $response = wp_remote_post('https://api.openai.com/v1/chat/completions', $request_args);
 
+    // レスポンスチェック
     if (is_wp_error($response)) {
-        wp_send_json_error($response->get_error_message());
-        return;
+        return $response;
     }
 
     $response_code = wp_remote_retrieve_response_code($response);
-
+    
     if ($response_code === 200) {
-        wp_send_json_success('APIキーが有効です');
+        return true;
     } else {
         $body = json_decode(wp_remote_retrieve_body($response), true);
-        $error_message = isset($body['error']['message']) ? $body['error']['message'] : '無効なAPIキーまたはAPIエラー';
-        wp_send_json_error($error_message);
+        $error_message = isset($body['error']['message']) ? $body['error']['message'] : __('Unknown error occurred.', 'llm-traffic-optimizer');
+        
+        return new WP_Error('api_validation_error', $error_message);
     }
 }
 
-// AJAXアクションを登録
-add_action('wp_ajax_lto_validate_api_key', 'lto_validate_api_key');
+// AJAX経由でAPIキーを検証するためのエンドポイント
+add_action('wp_ajax_lto_validate_api_key', 'lto_ajax_validate_api_key');
 
-// エラーハンドリング
-try {
-    // WP_Errorクラスが利用可能か確認
-    if (!class_exists('WP_Error')) {
-        throw new Exception('WP_Error class is not available. WordPress core may not be loaded correctly.');
+function lto_ajax_validate_api_key() {
+    // セキュリティチェック
+    check_ajax_referer('lto_ajax_nonce', 'nonce');
+    
+    // 権限チェック
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(__('You do not have sufficient permissions to perform this action.', 'llm-traffic-optimizer'));
+        return;
     }
-} catch (Exception $e) {
-    // エラーをログに記録
-    error_log('LLM Traffic Optimizer OpenAI Integration Error: ' . $e->getMessage());
-
-    // 管理画面でエラーを表示
-    if (is_admin()) {
-        add_action('admin_notices', function() use ($e) {
-            echo '<div class="error"><p>LLM Traffic Optimizer OpenAI Integration Error: ' . esc_html($e->getMessage()) . '</p></div>';
-        });
+    
+    // APIキーを取得
+    $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
+    
+    // APIキーの検証
+    $validation_result = lto_validate_api_key($api_key);
+    
+    if (is_wp_error($validation_result)) {
+        wp_send_json_error($validation_result->get_error_message());
+    } else {
+        // 有効なAPIキーを保存
+        update_option('lto_openai_api_key', $api_key);
+        wp_send_json_success(__('API key validated and saved successfully.', 'llm-traffic-optimizer'));
     }
 }
-?>
+
+// OpenAIモデルリストの取得
+function lto_get_openai_models() {
+    return array(
+        'gpt-4o' => 'GPT-4o',
+        'gpt-4-turbo' => 'GPT-4 Turbo',
+        'gpt-4' => 'GPT-4',
+        'gpt-3.5-turbo' => 'GPT-3.5 Turbo',
+        'gpt-3.5-turbo-16k' => 'GPT-3.5 Turbo 16K'
+    );
+}
+
+// モデル設定の保存
+add_action('wp_ajax_lto_save_model_settings', 'lto_ajax_save_model_settings');
+
+function lto_ajax_save_model_settings() {
+    // セキュリティチェック
+    check_ajax_referer('lto_ajax_nonce', 'nonce');
+    
+    // 権限チェック
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(__('You do not have sufficient permissions to perform this action.', 'llm-traffic-optimizer'));
+        return;
+    }
+    
+    // 設定を取得して保存
+    $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gpt-3.5-turbo';
+    $temperature = isset($_POST['temperature']) ? (float) $_POST['temperature'] : 0.7;
+    
+    // 値の検証
+    $available_models = array_keys(lto_get_openai_models());
+    if (!in_array($model, $available_models)) {
+        $model = 'gpt-3.5-turbo'; // デフォルトに戻す
+    }
+    
+    if ($temperature < 0 || $temperature > 1) {
+        $temperature = 0.7; // デフォルトに戻す
+    }
+    
+    // 設定を保存
+    update_option('lto_openai_model', $model);
+    update_option('lto_temperature', $temperature);
+    
+    wp_send_json_success(__('Model settings saved successfully.', 'llm-traffic-optimizer'));
+}
