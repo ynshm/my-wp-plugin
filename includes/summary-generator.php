@@ -206,10 +206,226 @@ function lto_generate_content_with_ai($summary_type, $title, $posts, $category_i
     return $response;
 }
 
-// New functions from edited snippet
 if (!defined('ABSPATH')) {
     exit; // 直接アクセス禁止
 }
+
+// OpenAI統合ファイルの読み込みを確認
+if (!function_exists('lto_openai_api_request')) {
+    require_once dirname(__FILE__) . '/openai-integration.php';
+}
+
+// 人気記事のまとめ記事を生成
+function lto_generate_popular_summary() {
+    // APIキーが設定されているか確認
+    $api_key = get_option('lto_openai_api_key');
+    if (empty($api_key)) {
+        return new WP_Error('missing_api_key', __('OpenAI API key is required for generating summaries.', 'llm-traffic-optimizer'));
+    }
+
+    // 人気記事を取得（コメント数やビュー数で並べ替え）
+    $popular_posts = get_posts(array(
+        'post_type' => 'post',
+        'post_status' => 'publish',
+        'posts_per_page' => 5,
+        'orderby' => 'comment_count',
+        'order' => 'DESC'
+    ));
+
+    if (empty($popular_posts)) {
+        return new WP_Error('no_posts', __('No popular posts found to summarize.', 'llm-traffic-optimizer'));
+    }
+
+    // 記事内容の収集
+    $posts_content = '';
+    foreach ($popular_posts as $post) {
+        $posts_content .= "記事タイトル: " . $post->post_title . "\n";
+        $posts_content .= "概要: " . mb_substr(strip_tags($post->post_content), 0, 300) . "...\n\n";
+    }
+
+    // プロンプトの作成
+    $prompt = "あなたは優れたコンテンツライターです。以下の人気記事の情報をもとに、これらの記事の共通点や価値を要約し、読者が関心を持ちそうな魅力的なまとめ記事を作成してください。\n\n";
+    $prompt .= $posts_content;
+    $prompt .= "\n以下の点を含めてまとめ記事を作成してください：\n";
+    $prompt .= "1. 魅力的なタイトル\n";
+    $prompt .= "2. これらの記事が人気である理由の分析\n";
+    $prompt .= "3. 各記事のハイライトとその価値\n";
+    $prompt .= "4. 読者へのおすすめポイント\n";
+    $prompt .= "5. 記事間の関連性\n\n";
+    $prompt .= "HTMLタグを使用して見やすく構造化された記事を作成してください。";
+
+    // OpenAI APIで要約を生成
+    $summary_content = lto_openai_api_request($prompt);
+
+    if (is_wp_error($summary_content)) {
+        return $summary_content;
+    }
+
+    // タイトルを抽出（最初の見出しを使用）
+    preg_match('/<h[1-6][^>]*>(.*?)<\/h[1-6]>/i', $summary_content, $title_matches);
+    $title = isset($title_matches[1]) ? strip_tags($title_matches[1]) : '人気記事まとめ：' . date('Y年m月');
+
+    // 投稿作成または更新
+    $existing_summary = get_page_by_title($title, OBJECT, 'post');
+
+    $post_data = array(
+        'post_title'    => $title,
+        'post_content'  => $summary_content,
+        'post_status'   => 'publish',
+        'post_type'     => 'post',
+        'post_author'   => 1, // デフォルトは管理者
+        'post_category' => array(get_option('lto_summary_category', 1)), // デフォルトはUncategorized
+    );
+
+    if ($existing_summary) {
+        $post_data['ID'] = $existing_summary->ID;
+        $summary_id = wp_update_post($post_data);
+    } else {
+        $summary_id = wp_insert_post($post_data);
+    }
+
+    if (is_wp_error($summary_id)) {
+        return $summary_id;
+    }
+
+    // メタデータを追加して、これがAI生成のまとめであることを記録
+    update_post_meta($summary_id, '_lto_ai_summary', 'popular_posts');
+    update_post_meta($summary_id, '_lto_summary_date', current_time('mysql'));
+
+    // 関連する記事のIDを記録
+    $related_ids = array();
+    foreach ($popular_posts as $post) {
+        $related_ids[] = $post->ID;
+    }
+    update_post_meta($summary_id, '_lto_related_posts', $related_ids);
+
+    return $summary_id;
+}
+
+// カテゴリ別のまとめ記事を生成
+function lto_generate_category_summary($category_id) {
+    // APIキーが設定されているか確認
+    $api_key = get_option('lto_openai_api_key');
+    if (empty($api_key)) {
+        return new WP_Error('missing_api_key', __('OpenAI API key is required for generating summaries.', 'llm-traffic-optimizer'));
+    }
+
+    // カテゴリーを取得
+    $category = get_category($category_id);
+    if (is_wp_error($category)) {
+        return $category;
+    }
+
+    // カテゴリー内の記事を取得
+    $category_posts = get_posts(array(
+        'post_type' => 'post',
+        'post_status' => 'publish',
+        'posts_per_page' => 10,
+        'category' => $category_id
+    ));
+
+    if (empty($category_posts)) {
+        return new WP_Error('no_posts', __('No posts found in this category.', 'llm-traffic-optimizer'));
+    }
+
+    // 記事内容の収集
+    $posts_content = '';
+    foreach ($category_posts as $post) {
+        $posts_content .= "記事タイトル: " . $post->post_title . "\n";
+        $posts_content .= "概要: " . mb_substr(strip_tags($post->post_content), 0, 300) . "...\n\n";
+    }
+
+    // プロンプトの作成
+    $prompt = "あなたは優れたコンテンツライターです。以下は「{$category->name}」カテゴリーの記事情報です。これらの記事を分析して、カテゴリー全体の傾向や重要なポイントをまとめた記事を作成してください。\n\n";
+    $prompt .= $posts_content;
+    $prompt .= "\n以下の点を含めてまとめ記事を作成してください：\n";
+    $prompt .= "1. カテゴリー「{$category->name}」に関する魅力的なタイトル\n";
+    $prompt .= "2. このカテゴリーの概要と重要性\n";
+    $prompt .= "3. 主要な記事のハイライトとその価値\n";
+    $prompt .= "4. カテゴリー内のトレンドや共通テーマ\n";
+    $prompt .= "5. 読者へのおすすめポイント\n\n";
+    $prompt .= "HTMLタグを使用して見やすく構造化された記事を作成してください。";
+
+    // OpenAI APIで要約を生成
+    $summary_content = lto_openai_api_request($prompt);
+
+    if (is_wp_error($summary_content)) {
+        return $summary_content;
+    }
+
+    // タイトルを抽出（最初の見出しを使用）
+    preg_match('/<h[1-6][^>]*>(.*?)<\/h[1-6]>/i', $summary_content, $title_matches);
+    $title = isset($title_matches[1]) ? strip_tags($title_matches[1]) : $category->name . 'カテゴリーまとめ：' . date('Y年m月');
+
+    // 投稿作成または更新
+    $existing_summary = get_page_by_title($title, OBJECT, 'post');
+
+    $post_data = array(
+        'post_title'    => $title,
+        'post_content'  => $summary_content,
+        'post_status'   => 'publish',
+        'post_type'     => 'post',
+        'post_author'   => 1, // デフォルトは管理者
+        'post_category' => array($category_id),
+    );
+
+    if ($existing_summary) {
+        $post_data['ID'] = $existing_summary->ID;
+        $summary_id = wp_update_post($post_data);
+    } else {
+        $summary_id = wp_insert_post($post_data);
+    }
+
+    if (is_wp_error($summary_id)) {
+        return $summary_id;
+    }
+
+    // メタデータを追加して、これがAI生成のまとめであることを記録
+    update_post_meta($summary_id, '_lto_ai_summary', 'category');
+    update_post_meta($summary_id, '_lto_summary_date', current_time('mysql'));
+    update_post_meta($summary_id, '_lto_category_id', $category_id);
+
+    return $summary_id;
+}
+
+// AJAX経由で手動でまとめ記事を生成するためのアクション
+add_action('wp_ajax_lto_generate_summary', 'lto_ajax_generate_summary');
+
+function lto_ajax_generate_summary() {
+    // 権限チェック
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('権限がありません');
+    }
+
+    // セキュリティチェック
+    check_ajax_referer('lto_ajax_nonce', 'nonce');
+
+    // パラメータ取得
+    $type = isset($_POST['type']) ? sanitize_text_field($_POST['type']) : 'popular';
+    $category_id = isset($_POST['category_id']) ? intval($_POST['category_id']) : 0;
+
+    // まとめタイプによって処理を分岐
+    if ($type === 'popular') {
+        $result = lto_generate_popular_summary();
+    } else if ($type === 'category' && $category_id > 0) {
+        $result = lto_generate_category_summary($category_id);
+    } else {
+        wp_send_json_error('無効なまとめタイプまたはカテゴリーIDです');
+    }
+
+    // 結果の処理
+    if (is_wp_error($result)) {
+        wp_send_json_error($result->get_error_message());
+    } else {
+        $post_url = get_permalink($result);
+        wp_send_json_success(array(
+            'message' => 'まとめ記事が生成されました',
+            'post_id' => $result,
+            'post_url' => $post_url
+        ));
+    }
+}
+
 
 // 新しい投稿が公開されたときにサマリーを自動生成
 add_action('transition_post_status', 'lto_auto_generate_summary', 10, 3);
