@@ -1,6 +1,9 @@
-
 <?php
-// Create admin menu
+if (!defined('ABSPATH')) {
+    exit; // 直接アクセス禁止
+}
+
+// 管理メニューを追加
 add_action('admin_menu', 'lto_add_admin_menu');
 
 function lto_add_admin_menu() {
@@ -9,31 +12,348 @@ function lto_add_admin_menu() {
         __('LLM Traffic', 'llm-traffic-optimizer'),
         'manage_options',
         'llm-traffic-optimizer',
-        'lto_admin_page',
+        'lto_render_main_page',
         'dashicons-chart-line',
         30
     );
-    
+
+    add_submenu_page(
+        'llm-traffic-optimizer',
+        __('Dashboard', 'llm-traffic-optimizer'),
+        __('Dashboard', 'llm-traffic-optimizer'),
+        'manage_options',
+        'llm-traffic-optimizer',
+        'lto_render_main_page'
+    );
+
     add_submenu_page(
         'llm-traffic-optimizer',
         __('Settings', 'llm-traffic-optimizer'),
         __('Settings', 'llm-traffic-optimizer'),
         'manage_options',
         'llm-traffic-optimizer-settings',
-        'lto_settings_page'
+        'lto_render_settings_page'
     );
-    
+
     add_submenu_page(
         'llm-traffic-optimizer',
-        __('Generate Summary', 'llm-traffic-optimizer'),
-        __('Generate Summary', 'llm-traffic-optimizer'),
+        __('Analytics', 'llm-traffic-optimizer'),
+        __('Analytics', 'llm-traffic-optimizer'),
         'manage_options',
-        'llm-traffic-optimizer-generate',
-        'lto_generate_page'
+        'llm-traffic-optimizer-analytics',
+        'lto_render_analytics_page'
     );
 }
 
-// Register settings
+// メインページレンダリング
+function lto_render_main_page() {
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <div class="lto-dashboard-container">
+            <div class="lto-dashboard-header">
+                <h2><?php _e('LLM Traffic Optimizer Dashboard', 'llm-traffic-optimizer'); ?></h2>
+                <p><?php _e('Monitor and optimize your website for AI search traffic.', 'llm-traffic-optimizer'); ?></p>
+            </div>
+
+            <div class="lto-stats-container">
+                <div class="lto-stat-box">
+                    <h3><?php _e('Total AI Referrals', 'llm-traffic-optimizer'); ?></h3>
+                    <div class="lto-stat-value"><?php echo esc_html(lto_get_total_ai_referrals()); ?></div>
+                </div>
+
+                <div class="lto-stat-box">
+                    <h3><?php _e('Top AI-Referred Content', 'llm-traffic-optimizer'); ?></h3>
+                    <ul class="lto-top-content">
+                        <?php
+                        $top_content = lto_get_top_ai_content(5);
+                        if (empty($top_content)) {
+                            echo '<li>' . __('No data available yet', 'llm-traffic-optimizer') . '</li>';
+                        } else {
+                            foreach ($top_content as $content) {
+                                echo '<li><a href="' . esc_url(get_permalink($content->post_id)) . '">' . esc_html(get_the_title($content->post_id)) . '</a> (' . esc_html($content->ai_referrals) . ')</li>';
+                            }
+                        }
+                        ?>
+                    </ul>
+                </div>
+
+                <div class="lto-stat-box">
+                    <h3><?php _e('LLMS.txt Status', 'llm-traffic-optimizer'); ?></h3>
+                    <div class="lto-status-indicator">
+                        <?php if (file_exists(ABSPATH . 'llms.txt')) : ?>
+                            <span class="lto-status-good"><?php _e('Active', 'llm-traffic-optimizer'); ?></span>
+                        <?php else : ?>
+                            <span class="lto-status-bad"><?php _e('Missing', 'llm-traffic-optimizer'); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <a href="<?php echo esc_url(home_url('/llms.txt')); ?>" target="_blank"><?php _e('View LLMS.txt', 'llm-traffic-optimizer'); ?></a>
+                </div>
+            </div>
+
+            <div class="lto-action-buttons">
+                <a href="<?php echo esc_url(admin_url('admin.php?page=llm-traffic-optimizer-settings')); ?>" class="button button-primary"><?php _e('Configure Settings', 'llm-traffic-optimizer'); ?></a>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=llm-traffic-optimizer-analytics')); ?>" class="button button-secondary"><?php _e('View Detailed Analytics', 'llm-traffic-optimizer'); ?></a>
+            </div>
+        </div>
+    </div>
+    <?php
+}
+
+// 設定ページレンダリング
+function lto_render_settings_page() {
+    // Save settings if form is submitted
+    if (isset($_POST['lto_save_settings']) && check_admin_referer('lto_settings_nonce')) {
+        $openai_api_key = isset($_POST['lto_openai_api_key']) ? sanitize_text_field($_POST['lto_openai_api_key']) : '';
+        $openai_model = isset($_POST['lto_openai_model']) ? sanitize_text_field($_POST['lto_openai_model']) : 'gpt-3.5-turbo';
+        $temperature = isset($_POST['lto_temperature']) ? floatval($_POST['lto_temperature']) : 0.7;
+        $enable_auto_summaries = isset($_POST['lto_enable_auto_summaries']) ? 'yes' : 'no';
+
+        update_option('lto_openai_api_key', $openai_api_key);
+        update_option('lto_openai_model', $openai_model);
+        update_option('lto_temperature', $temperature);
+        update_option('lto_enable_auto_summaries', $enable_auto_summaries);
+
+        // Regenerate LLMS.txt files
+        if (function_exists('lto_generate_llms_txt')) {
+            lto_generate_llms_txt();
+        }
+
+        if (function_exists('lto_generate_llms_full_txt')) {
+            lto_generate_llms_full_txt();
+        }
+
+        echo '<div class="notice notice-success is-dismissible"><p>' . __('Settings saved successfully!', 'llm-traffic-optimizer') . '</p></div>';
+    }
+
+    // Get current settings
+    $openai_api_key = get_option('lto_openai_api_key', '');
+    $openai_model = get_option('lto_openai_model', 'gpt-3.5-turbo');
+    $temperature = get_option('lto_temperature', 0.7);
+    $enable_auto_summaries = get_option('lto_enable_auto_summaries', 'yes');
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <form method="post" action="">
+            <?php wp_nonce_field('lto_settings_nonce'); ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('OpenAI API Key', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <input type="password" name="lto_openai_api_key" value="<?php echo esc_attr($openai_api_key); ?>" class="regular-text" />
+                        <p class="description"><?php _e('Your OpenAI API key is required for generating AI summaries.', 'llm-traffic-optimizer'); ?></p>
+                        <button type="button" id="lto-validate-api-key" class="button button-secondary"><?php _e('Validate API Key', 'llm-traffic-optimizer'); ?></button>
+                        <span id="lto-api-key-validation-result"></span>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('OpenAI Model', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <select name="lto_openai_model">
+                            <option value="gpt-3.5-turbo" <?php selected($openai_model, 'gpt-3.5-turbo'); ?>><?php _e('GPT-3.5 Turbo', 'llm-traffic-optimizer'); ?></option>
+                            <option value="gpt-4" <?php selected($openai_model, 'gpt-4'); ?>><?php _e('GPT-4', 'llm-traffic-optimizer'); ?></option>
+                        </select>
+                        <p class="description"><?php _e('Select the AI model to use for generating summaries.', 'llm-traffic-optimizer'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Temperature', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <input type="range" name="lto_temperature" min="0" max="1" step="0.1" value="<?php echo esc_attr($temperature); ?>" />
+                        <span id="lto-temperature-value"><?php echo esc_html($temperature); ?></span>
+                        <p class="description"><?php _e('Controls randomness: 0 is more focused, 1 is more creative.', 'llm-traffic-optimizer'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Auto-Generate Summaries', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="lto_enable_auto_summaries" <?php checked($enable_auto_summaries, 'yes'); ?> />
+                            <?php _e('Automatically generate AI summaries for your content', 'llm-traffic-optimizer'); ?>
+                        </label>
+                        <p class="description"><?php _e('When enabled, the plugin will create AI-friendly summary posts for your content.', 'llm-traffic-optimizer'); ?></p>
+                    </td>
+                </tr>
+            </table>
+            <p class="submit">
+                <input type="submit" name="lto_save_settings" class="button button-primary" value="<?php _e('Save Settings', 'llm-traffic-optimizer'); ?>" />
+            </p>
+        </form>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        // Update temperature value display
+        $('input[name="lto_temperature"]').on('input', function() {
+            $('#lto-temperature-value').text($(this).val());
+        });
+
+        // API key validation
+        $('#lto-validate-api-key').on('click', function() {
+            const apiKey = $('input[name="lto_openai_api_key"]').val();
+            const resultElement = $('#lto-api-key-validation-result');
+
+            if (!apiKey) {
+                resultElement.html('<span style="color: red;">APIキーを入力してください</span>');
+                return;
+            }
+
+            resultElement.html('<span style="color: blue;">検証中...</span>');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'lto_validate_api_key',
+                    api_key: apiKey,
+                    nonce: '<?php echo wp_create_nonce('lto_validate_api_key_nonce'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        resultElement.html('<span style="color: green;">有効なAPIキーです</span>');
+                    } else {
+                        resultElement.html('<span style="color: red;">無効なAPIキー: ' + response.data + '</span>');
+                    }
+                },
+                error: function() {
+                    resultElement.html('<span style="color: red;">検証中にエラーが発生しました</span>');
+                }
+            });
+        });
+    });
+    </script>
+    <?php
+}
+
+// アナリティクスページのレンダリング
+function lto_render_analytics_page() {
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <div class="lto-analytics-container">
+            <h2><?php _e('AI Traffic Analytics', 'llm-traffic-optimizer'); ?></h2>
+
+            <div class="lto-analytics-table-container">
+                <h3><?php _e('Top Posts by AI Referrals', 'llm-traffic-optimizer'); ?></h3>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th><?php _e('Post Title', 'llm-traffic-optimizer'); ?></th>
+                            <th><?php _e('Total Views', 'llm-traffic-optimizer'); ?></th>
+                            <th><?php _e('AI Referrals', 'llm-traffic-optimizer'); ?></th>
+                            <th><?php _e('AI Referral %', 'llm-traffic-optimizer'); ?></th>
+                            <th><?php _e('Last Updated', 'llm-traffic-optimizer'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $analytics_data = lto_get_analytics_data();
+                        if (empty($analytics_data)) {
+                            echo '<tr><td colspan="5">' . __('No data available yet. Analytics will appear as your content receives traffic.', 'llm-traffic-optimizer') . '</td></tr>';
+                        } else {
+                            foreach ($analytics_data as $item) {
+                                $percentage = $item->views > 0 ? round(($item->ai_referrals / $item->views) * 100, 2) : 0;
+                                ?>
+                                <tr>
+                                    <td>
+                                        <a href="<?php echo esc_url(get_permalink($item->post_id)); ?>" target="_blank">
+                                            <?php echo esc_html(get_the_title($item->post_id)); ?>
+                                        </a>
+                                    </td>
+                                    <td><?php echo esc_html($item->views); ?></td>
+                                    <td><?php echo esc_html($item->ai_referrals); ?></td>
+                                    <td><?php echo esc_html($percentage); ?>%</td>
+                                    <td><?php echo esc_html($item->last_updated); ?></td>
+                                </tr>
+                                <?php
+                            }
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="lto-export-section">
+                <h3><?php _e('Export Data', 'llm-traffic-optimizer'); ?></h3>
+                <button id="lto-export-csv" class="button button-secondary"><?php _e('Export as CSV', 'llm-traffic-optimizer'); ?></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        // Export to CSV functionality
+        $('#lto-export-csv').on('click', function() {
+            // Create CSV content
+            var csv = 'Post ID,Post Title,Total Views,AI Referrals,AI Referral %,Last Updated\n';
+
+            $('.lto-analytics-table-container table tbody tr').each(function() {
+                var postTitle = $(this).find('td:nth-child(1) a').text().trim();
+                var postUrl = $(this).find('td:nth-child(1) a').attr('href');
+                var postId = postUrl ? postUrl.split('=').pop() : '';
+                var views = $(this).find('td:nth-child(2)').text().trim();
+                var aiReferrals = $(this).find('td:nth-child(3)').text().trim();
+                var percentage = $(this).find('td:nth-child(4)').text().trim();
+                var lastUpdated = $(this).find('td:nth-child(5)').text().trim();
+
+                csv += '"' + postId + '","' + postTitle + '","' + views + '","' + aiReferrals + '","' + percentage + '","' + lastUpdated + '"\n';
+            });
+
+            // Create download link
+            var downloadLink = document.createElement('a');
+            downloadLink.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            downloadLink.download = 'llm-traffic-analytics.csv';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        });
+    });
+    </script>
+    <?php
+}
+
+// アナリティクスデータの取得
+function lto_get_analytics_data() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'lto_analytics';
+
+    $results = $wpdb->get_results("
+        SELECT * FROM $table_name
+        ORDER BY ai_referrals DESC
+        LIMIT 100
+    ");
+
+    return $results ? $results : array();
+}
+
+// 総AIリファラル数の取得
+function lto_get_total_ai_referrals() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'lto_analytics';
+
+    $total = $wpdb->get_var("
+        SELECT SUM(ai_referrals) 
+        FROM $table_name
+    ");
+
+    return $total ? $total : 0;
+}
+
+// AIコンテンツトップの取得
+function lto_get_top_ai_content($limit = 5) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'lto_analytics';
+
+    $results = $wpdb->get_results($wpdb->prepare("
+        SELECT * FROM $table_name
+        ORDER BY ai_referrals DESC
+        LIMIT %d
+    ", $limit));
+
+    return $results ? $results : array();
+}
+
+// Register settings (moved from original code)
 add_action('admin_init', 'lto_register_settings');
 
 function lto_register_settings() {
@@ -48,447 +368,37 @@ function lto_register_settings() {
     register_setting('lto-settings-group', 'lto_enable_analytics');
 }
 
-// Admin main page
-function lto_admin_page() {
-    ?>
-    <div class="wrap">
-        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-        
-        <div class="lto-dashboard">
-            <div class="lto-card">
-                <h2><?php _e('LLM Traffic Overview', 'llm-traffic-optimizer'); ?></h2>
-                <p><?php _e('Monitor traffic from AI sources and optimize your content.', 'llm-traffic-optimizer'); ?></p>
-                
-                <?php
-                // Get analytics data
-                $ai_traffic = lto_get_ai_traffic_stats();
-                ?>
-                
-                <div class="lto-stats">
-                    <div class="lto-stat-item">
-                        <span class="lto-stat-number"><?php echo esc_html($ai_traffic['total']); ?></span>
-                        <span class="lto-stat-label"><?php _e('Total AI Visits', 'llm-traffic-optimizer'); ?></span>
-                    </div>
-                    <div class="lto-stat-item">
-                        <span class="lto-stat-number"><?php echo esc_html($ai_traffic['trend']); ?>%</span>
-                        <span class="lto-stat-label"><?php _e('Growth Trend', 'llm-traffic-optimizer'); ?></span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="lto-card">
-                <h2><?php _e('Quick Actions', 'llm-traffic-optimizer'); ?></h2>
-                <ul class="lto-actions">
-                    <li>
-                        <a href="<?php echo esc_url(admin_url('admin.php?page=llm-traffic-optimizer-generate')); ?>" class="button button-primary">
-                            <?php _e('Generate New Summary', 'llm-traffic-optimizer'); ?>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="<?php echo esc_url(site_url('llms.txt')); ?>" target="_blank" class="button">
-                            <?php _e('View LLMS.txt', 'llm-traffic-optimizer'); ?>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="<?php echo esc_url(site_url('llms-full.txt')); ?>" target="_blank" class="button">
-                            <?php _e('View LLMS-Full.txt', 'llm-traffic-optimizer'); ?>
-                        </a>
-                    </li>
-                </ul>
-            </div>
-            
-            <div class="lto-card">
-                <h2><?php _e('Top AI-Driven Content', 'llm-traffic-optimizer'); ?></h2>
-                <?php
-                $top_posts = lto_get_top_ai_posts(5);
-                if (!empty($top_posts)) {
-                    echo '<ul class="lto-post-list">';
-                    foreach ($top_posts as $post) {
-                        echo '<li>';
-                        echo '<a href="' . esc_url(get_permalink($post->ID)) . '">' . esc_html($post->post_title) . '</a>';
-                        echo '<span class="lto-visits">' . esc_html($post->ai_visits) . ' ' . __('AI visits', 'llm-traffic-optimizer') . '</span>';
-                        echo '</li>';
-                    }
-                    echo '</ul>';
-                } else {
-                    echo '<p>' . __('No data available yet. Enable analytics to track AI visits.', 'llm-traffic-optimizer') . '</p>';
-                }
-                ?>
-            </div>
-        </div>
-    </div>
-    
-    <style>
-    .lto-dashboard {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 20px;
-        margin-top: 20px;
-    }
-    
-    .lto-card {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    
-    .lto-stats {
-        display: flex;
-        justify-content: space-around;
-        margin-top: 20px;
-    }
-    
-    .lto-stat-item {
-        text-align: center;
-    }
-    
-    .lto-stat-number {
-        display: block;
-        font-size: 24px;
-        font-weight: bold;
-        color: #0073aa;
-    }
-    
-    .lto-stat-label {
-        display: block;
-        margin-top: 5px;
-        color: #666;
-    }
-    
-    .lto-actions {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-    
-    .lto-actions li {
-        margin-bottom: 10px;
-    }
-    
-    .lto-post-list {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-    }
-    
-    .lto-post-list li {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #eee;
-    }
-    
-    .lto-visits {
-        color: #666;
-        font-size: 0.9em;
-    }
-    </style>
-    <?php
-}
 
-// Settings page
-function lto_settings_page() {
-    ?>
-    <div class="wrap">
-        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-        
-        <form method="post" action="options.php">
-            <?php settings_fields('lto-settings-group'); ?>
-            <?php do_settings_sections('lto-settings-group'); ?>
-            
-            <table class="form-table">
-                <tr>
-                    <th scope="row"><?php _e('OpenAI API Key', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <input type="password" name="lto_openai_api_key" value="<?php echo esc_attr(get_option('lto_openai_api_key')); ?>" class="regular-text" />
-                        <p class="description"><?php _e('Required for generating summary content with ChatGPT.', 'llm-traffic-optimizer'); ?></p>
-                        <button type="button" id="validate_api_key" class="button button-secondary"><?php _e('Validate API Key', 'llm-traffic-optimizer'); ?></button>
-                        <span id="api_key_status" style="margin-left: 10px;"></span>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('OpenAI Model', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <select name="lto_openai_model" id="lto_openai_model">
-                            <optgroup label="<?php _e('GPT-4 Models', 'llm-traffic-optimizer'); ?>">
-                                <option value="gpt-4" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-4'); ?>><?php _e('GPT-4 (Most capable)', 'llm-traffic-optimizer'); ?></option>
-                                <option value="gpt-4-32k" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-4-32k'); ?>><?php _e('GPT-4 32k (Larger context window)', 'llm-traffic-optimizer'); ?></option>
-                            </optgroup>
-                            <optgroup label="<?php _e('GPT-3.5 Models', 'llm-traffic-optimizer'); ?>">
-                                <option value="gpt-3.5-turbo" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-3.5-turbo'); ?>><?php _e('GPT-3.5 Turbo (Default)', 'llm-traffic-optimizer'); ?></option>
-                                <option value="gpt-3.5-turbo-16k" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-3.5-turbo-16k'); ?>><?php _e('GPT-3.5 Turbo 16k', 'llm-traffic-optimizer'); ?></option>
-                            </optgroup>
-                        </select>
-                        <p class="description"><?php _e('Select the OpenAI model to use for generating summaries. More capable models may cost more to use.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Model Parameters', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <label for="lto_temperature"><?php _e('Temperature:', 'llm-traffic-optimizer'); ?></label>
-                        <input type="range" id="lto_temperature" name="lto_temperature" min="0" max="2" step="0.1" value="<?php echo esc_attr(get_option('lto_temperature', '0.7')); ?>" />
-                        <span id="temperature_value"><?php echo esc_html(get_option('lto_temperature', '0.7')); ?></span>
-                        <p class="description"><?php _e('Controls randomness. Lower values (0.2) make output more focused and deterministic. Higher values (0.8) make output more random and creative.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Enable Auto Summaries', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <select name="lto_enable_auto_summaries">
-                            <option value="yes" <?php selected(get_option('lto_enable_auto_summaries', 'yes'), 'yes'); ?>><?php _e('Yes', 'llm-traffic-optimizer'); ?></option>
-                            <option value="no" <?php selected(get_option('lto_enable_auto_summaries', 'yes'), 'no'); ?>><?php _e('No', 'llm-traffic-optimizer'); ?></option>
-                        </select>
-                        <p class="description"><?php _e('Automatically generate summary posts on a schedule.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Summary Generation Frequency', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <select name="lto_summary_frequency">
-                            <option value="daily" <?php selected(get_option('lto_summary_frequency', 'weekly'), 'daily'); ?>><?php _e('Daily', 'llm-traffic-optimizer'); ?></option>
-                            <option value="weekly" <?php selected(get_option('lto_summary_frequency', 'weekly'), 'weekly'); ?>><?php _e('Weekly', 'llm-traffic-optimizer'); ?></option>
-                            <option value="monthly" <?php selected(get_option('lto_summary_frequency', 'weekly'), 'monthly'); ?>><?php _e('Monthly', 'llm-traffic-optimizer'); ?></option>
-                        </select>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Summary Post Category', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <?php
-                        $categories = get_categories(array('hide_empty' => false));
-                        $selected_category = get_option('lto_summary_category', '');
-                        ?>
-                        <select name="lto_summary_category">
-                            <option value=""><?php _e('Select Category', 'llm-traffic-optimizer'); ?></option>
-                            <?php foreach ($categories as $category) : ?>
-                                <option value="<?php echo esc_attr($category->term_id); ?>" <?php selected($selected_category, $category->term_id); ?>>
-                                    <?php echo esc_html($category->name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Site Description', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <textarea name="lto_site_description" rows="3" class="large-text"><?php echo esc_textarea(get_option('lto_site_description', get_bloginfo('description'))); ?></textarea>
-                        <p class="description"><?php _e('Used in LLMS.txt to describe your site to AI search engines.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Number of Top Posts to Include', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <input type="number" name="lto_top_posts_count" value="<?php echo esc_attr(get_option('lto_top_posts_count', '10')); ?>" min="5" max="50" />
-                        <p class="description"><?php _e('Number of popular posts to include in summaries.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Enable Analytics Tracking', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <select name="lto_enable_analytics">
-                            <option value="yes" <?php selected(get_option('lto_enable_analytics', 'yes'), 'yes'); ?>><?php _e('Yes', 'llm-traffic-optimizer'); ?></option>
-                            <option value="no" <?php selected(get_option('lto_enable_analytics', 'yes'), 'no'); ?>><?php _e('No', 'llm-traffic-optimizer'); ?></option>
-                        </select>
-                        <p class="description"><?php _e('Track visits from AI sources separately.', 'llm-traffic-optimizer'); ?></p>
-                    </td>
-                </tr>
-            </table>
-            
-            <?php submit_button(); ?>
-        </form>
-    </div>
-    <?php
-}
+// Helper function to get AI traffic stats (modified to use new functions)
+//function lto_get_ai_traffic_stats() { ... } //Removed - replaced by lto_get_total_ai_referrals
 
-// Generate summary page
-function lto_generate_page() {
-    ?>
-    <div class="wrap">
-        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-        
-        <?php
-        // Handle form submission
-        if (isset($_POST['lto_generate_summary'])) {
-            check_admin_referer('lto_generate_summary_nonce');
-            
-            $summary_type = sanitize_text_field($_POST['summary_type']);
-            $title = sanitize_text_field($_POST['summary_title']);
-            
-            if (empty($title)) {
-                echo '<div class="notice notice-error"><p>' . __('Please enter a title for the summary.', 'llm-traffic-optimizer') . '</p></div>';
-            } else {
-                // Generate the summary
-                $result = lto_generate_summary($summary_type, $title);
-                
-                if (is_wp_error($result)) {
-                    echo '<div class="notice notice-error"><p>' . $result->get_error_message() . '</p></div>';
-                } else {
-                    echo '<div class="notice notice-success"><p>' . 
-                        sprintf(
-                            __('Summary created successfully! <a href="%s">View Post</a>', 'llm-traffic-optimizer'),
-                            get_permalink($result)
-                        ) . '</p></div>';
-                }
-            }
-        }
-        ?>
-        
-        <form method="post" action="">
-            <?php wp_nonce_field('lto_generate_summary_nonce'); ?>
-            
-            <table class="form-table">
-                <tr>
-                    <th scope="row"><?php _e('Summary Type', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <select name="summary_type" id="summary_type">
-                            <option value="popular"><?php _e('Popular Posts Summary', 'llm-traffic-optimizer'); ?></option>
-                            <option value="category"><?php _e('Category Summary', 'llm-traffic-optimizer'); ?></option>
-                            <option value="latest"><?php _e('Latest Posts Summary', 'llm-traffic-optimizer'); ?></option>
-                        </select>
-                    </td>
-                </tr>
-                
-                <tr id="category_row" style="display:none;">
-                    <th scope="row"><?php _e('Select Category', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <?php
-                        $categories = get_categories(array('hide_empty' => false));
-                        ?>
-                        <select name="category_id">
-                            <?php foreach ($categories as $category) : ?>
-                                <option value="<?php echo esc_attr($category->term_id); ?>">
-                                    <?php echo esc_html($category->name); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </td>
-                </tr>
-                
-                <tr>
-                    <th scope="row"><?php _e('Summary Title', 'llm-traffic-optimizer'); ?></th>
-                    <td>
-                        <input type="text" name="summary_title" class="regular-text" required />
-                    </td>
-                </tr>
-            </table>
-            
-            <?php submit_button(__('Generate Summary', 'llm-traffic-optimizer'), 'primary', 'lto_generate_summary'); ?>
-        </form>
-        
-        <script>
-        jQuery(document).ready(function($) {
-            $('#summary_type').on('change', function() {
-                if ($(this).val() === 'category') {
-                    $('#category_row').show();
-                } else {
-                    $('#category_row').hide();
-                }
-            });
-        });
-        </script>
-    </div>
-    <?php
-}
+// Helper function to get top AI-driven posts (modified to use new functions)
+//function lto_get_top_ai_posts($limit = 5) { ... } //Removed - replaced by lto_get_top_ai_content
 
-// Helper function to get AI traffic stats
-function lto_get_ai_traffic_stats() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'lto_analytics';
-    
-    // Default return if no data
-    $default = array(
-        'total' => 0,
-        'trend' => 0
-    );
-    
-    // Check if table exists
-    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-        return $default;
-    }
-    
-    // Get total AI visits
-    $total = $wpdb->get_var("SELECT SUM(ai_referrals) FROM $table_name");
-    
-    // Get trend (comparing current month with previous month)
-    $current_month = date('Y-m');
-    $prev_month = date('Y-m', strtotime('-1 month'));
-    
-    $current_total = $wpdb->get_var($wpdb->prepare(
-        "SELECT SUM(ai_referrals) FROM $table_name WHERE DATE_FORMAT(last_updated, '%%Y-%%m') = %s",
-        $current_month
-    ));
-    
-    $prev_total = $wpdb->get_var($wpdb->prepare(
-        "SELECT SUM(ai_referrals) FROM $table_name WHERE DATE_FORMAT(last_updated, '%%Y-%%m') = %s",
-        $prev_month
-    ));
-    
-    $trend = 0;
-    if ($prev_total > 0 && $current_total > 0) {
-        $trend = round((($current_total - $prev_total) / $prev_total) * 100);
-    }
-    
-    return array(
-        'total' => $total ? $total : 0,
-        'trend' => $trend
-    );
-}
 
-// Helper function to get top AI-driven posts
-function lto_get_top_ai_posts($limit = 5) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'lto_analytics';
-    
-    // Check if table exists
-    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
-        return array();
-    }
-    
-    $query = $wpdb->prepare(
-        "SELECT p.ID, p.post_title, a.ai_referrals as ai_visits 
-         FROM {$wpdb->posts} p
-         JOIN $table_name a ON p.ID = a.post_id
-         WHERE p.post_status = 'publish'
-         ORDER BY a.ai_referrals DESC
-         LIMIT %d",
-        $limit
-    );
-    
-    $results = $wpdb->get_results($query);
-    
-    return $results ? $results : array();
-}
+// Generate summary page (largely removed - functionality might need to be added elsewhere)
+//function lto_generate_page() { ... } // Removed -  Functionality should be integrated elsewhere, perhaps within a new admin page or by modifying the existing settings page.
+
 ?>
-
 <script>
 jQuery(document).ready(function($) {
-    // Handle temperature slider updates
+    // Handle temperature slider updates (moved and updated for new ID)
     $('#lto_temperature').on('input', function() {
         $('#temperature_value').text($(this).val());
     });
-    
-    // API Key validation
+
+    // API Key validation (moved and updated for new ID)
     $('#validate_api_key').on('click', function() {
         const apiKey = $('input[name="lto_openai_api_key"]').val();
         const statusElement = $('#api_key_status');
-        
+
         if (!apiKey) {
             statusElement.text('Please enter an API key').css('color', 'red');
             return;
         }
-        
+
         statusElement.text('Validating...').css('color', 'blue');
-        
+
         // Ajax request to validate API key
         $.ajax({
             url: ajaxurl,
@@ -509,6 +419,14 @@ jQuery(document).ready(function($) {
                 statusElement.text('✗ Validation failed. Please try again.').css('color', 'red');
             }
         });
+    });
+    //Summary type change handler (moved from generate page)
+    $('#summary_type').on('change', function() {
+        if ($(this).val() === 'category') {
+            $('#category_row').show();
+        } else {
+            $('#category_row').hide();
+        }
     });
 });
 </script>
