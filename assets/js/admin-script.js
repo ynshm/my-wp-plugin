@@ -93,6 +93,7 @@ jQuery(document).ready(function($) {
                 action: 'lto_regenerate_llms_txt',
                 nonce: ltoAjax.nonce
             },
+            timeout: 30000, // 30秒のタイムアウト設定
             success: function(response) {
                 if (response.success) {
                     alert(response.data);

@@ -56,10 +56,18 @@ function lto_generate_llms_txt() {
     
     // ファイルに書き込み
     $file_path = ABSPATH . 'llms.txt';
-    file_put_contents($file_path, $content);
+    $result = file_put_contents($file_path, $content);
+    
+    if ($result === false) {
+        error_log('Error writing to llms.txt: Permission denied or disk full');
+        return new WP_Error('file_write_error', __('Could not write to llms.txt file. Please check file permissions.', 'llm-traffic-optimizer'));
+    }
     
     // 詳細バージョンも生成
-    lto_generate_llms_full_txt();
+    $full_result = lto_generate_llms_full_txt();
+    if (is_wp_error($full_result)) {
+        return $full_result;
+    }
     
     return true;
 }
@@ -150,7 +158,12 @@ function lto_generate_llms_full_txt() {
     
     // ファイルに書き込み
     $file_path = ABSPATH . 'llms-full.txt';
-    file_put_contents($file_path, $content);
+    $result = file_put_contents($file_path, $content);
+    
+    if ($result === false) {
+        error_log('Error writing to llms-full.txt: Permission denied or disk full');
+        return new WP_Error('file_write_error', __('Could not write to llms-full.txt file. Please check file permissions.', 'llm-traffic-optimizer'));
+    }
     
     return true;
 }
@@ -162,18 +175,27 @@ function lto_ajax_regenerate_llms_txt() {
     // 権限チェック
     if (!current_user_can('manage_options')) {
         wp_send_json_error('権限がありません');
+        return;
     }
     
     // セキュリティチェック
-    check_ajax_referer('lto_ajax_nonce', 'nonce');
+    if (!check_ajax_referer('lto_ajax_nonce', 'nonce', false)) {
+        wp_send_json_error('セキュリティチェックが失敗しました。ページを更新してください。');
+        return;
+    }
     
     // LLMS.txtを再生成
     $result = lto_generate_llms_txt();
     
-    if ($result) {
+    if (is_wp_error($result)) {
+        wp_send_json_error($result->get_error_message());
+        return;
+    } else if ($result) {
         wp_send_json_success('LLMS.txtが正常に更新されました');
+        return;
     } else {
         wp_send_json_error('LLMS.txtの更新中にエラーが発生しました');
+        return;
     }
 }
 

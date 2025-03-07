@@ -373,7 +373,7 @@ function lto_display_llms_page() {
                 type: 'POST',
                 data: {
                     action: 'lto_regenerate_llms_txt',
-                    nonce: '<?php echo wp_create_nonce('lto_ajax_nonce'); ?>'
+                    nonce: ltoAjax.noncee: '<?php echo wp_create_nonce('lto_ajax_nonce'); ?>'
                 },
                 success: function(response) {
                     if (response.success) {

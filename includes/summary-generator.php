@@ -258,7 +258,13 @@ function lto_generate_popular_summary() {
     $summary_content = lto_openai_api_request($prompt);
 
     if (is_wp_error($summary_content)) {
+        error_log('OpenAI API error in summary generation: ' . $summary_content->get_error_message());
         return $summary_content;
+    }
+
+    if (empty($summary_content)) {
+        error_log('Empty response from OpenAI API in summary generation');
+        return new WP_Error('empty_response', __('Received an empty response from OpenAI API. Please try again.', 'llm-traffic-optimizer'));
     }
 
     // タイトルを抽出（最初の見出しを使用）
@@ -350,7 +356,13 @@ function lto_generate_category_summary($category_id) {
     $summary_content = lto_openai_api_request($prompt);
 
     if (is_wp_error($summary_content)) {
+        error_log('OpenAI API error in summary generation: ' . $summary_content->get_error_message());
         return $summary_content;
+    }
+
+    if (empty($summary_content)) {
+        error_log('Empty response from OpenAI API in summary generation');
+        return new WP_Error('empty_response', __('Received an empty response from OpenAI API. Please try again.', 'llm-traffic-optimizer'));
     }
 
     // タイトルを抽出（最初の見出しを使用）

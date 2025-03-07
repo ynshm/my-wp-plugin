@@ -101,6 +101,7 @@ function lto_validate_api_key($api_key) {
 
     // レスポンスチェック
     if (is_wp_error($response)) {
+        error_log('OpenAI API validation error: ' . $response->get_error_message());
         return $response;
     }
 
@@ -111,7 +112,7 @@ function lto_validate_api_key($api_key) {
     } else {
         $body = json_decode(wp_remote_retrieve_body($response), true);
         $error_message = isset($body['error']['message']) ? $body['error']['message'] : __('Unknown error occurred.', 'llm-traffic-optimizer');
-        
+        error_log('OpenAI API validation error: Code ' . $response_code . ' - ' . $error_message);
         return new WP_Error('api_validation_error', $error_message);
     }
 }
