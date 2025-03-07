@@ -1,2 +1,21 @@
 [nix]
 channel = "stable-24_05"
+run = "php -S 0.0.0.0:8080 -t ."
+entrypoint = "llm-traffic-optimizer.php"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = "php -S 0.0.0.0:8080 -t ."
+
+[languages]
+
+[languages.php]
+pattern = "**/*.php"
+
+[languages.php.languageServer]
+start = "php-language-server"
+
+[languages.php.nix]
+packages = ["php74"]
