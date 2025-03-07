@@ -1,5 +1,16 @@
 
 <?php
+if (!defined('ABSPATH')) {
+    exit; // 直接アクセス禁止
+}
+
+// エラーハンドリング
+try {
+    // WP_Errorクラスが利用可能か確認
+    if (!class_exists('WP_Error')) {
+        throw new Exception('WP_Error class is not available. WordPress core may not be loaded correctly.');
+    }
+    
 // Function to make API requests to OpenAI
 function lto_openai_api_request($prompt) {
     // Get API key
@@ -114,3 +125,15 @@ function lto_validate_api_key() {
 
 // Register AJAX actions
 add_action('wp_ajax_lto_validate_api_key', 'lto_validate_api_key');
+
+} catch (Exception $e) {
+    // エラーをログに記録
+    error_log('LLM Traffic Optimizer OpenAI Integration Error: ' . $e->getMessage());
+    
+    // 管理画面でエラーを表示
+    if (is_admin()) {
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="error"><p>LLM Traffic Optimizer OpenAI Integration Error: ' . esc_html($e->getMessage()) . '</p></div>';
+        });
+    }
+}

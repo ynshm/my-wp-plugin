@@ -29,11 +29,11 @@ if (version_compare(PHP_VERSION, '7.0.0', '<')) {
         }
     }
     add_action('admin_notices', 'lto_php_version_error');
-    
+
     // プラグインを自動的に無効化
     require_once(ABSPATH . 'wp-admin/includes/plugin.php');
     deactivate_plugins(plugin_basename(__FILE__));
-    
+
     // アクティベーションエラーをトリガー（リダイレクト）
     if (isset($_GET['activate'])) {
         unset($_GET['activate']);
@@ -41,7 +41,7 @@ if (version_compare(PHP_VERSION, '7.0.0', '<')) {
             echo '<div class="error"><p>LLM Traffic Optimizer was deactivated due to PHP version incompatibility.</p></div>';
         });
     }
-    
+
     return;
 }
 
@@ -66,7 +66,7 @@ foreach ($required_wp_functions as $function) {
 
 if (!empty($missing_functions)) {
     lto_debug_log('Missing WordPress core functions: ' . implode(', ', $missing_functions));
-    
+
     // 管理画面で警告を表示
     add_action('admin_notices', function() use ($missing_functions) {
         echo '<div class="error"><p>LLM Traffic Optimizer: Missing WordPress core functions: ' . implode(', ', $missing_functions) . '</p></div>';
@@ -161,14 +161,14 @@ function lto_activate_plugin() {
         if (!wp_next_scheduled('lto_daily_update')) {
             wp_schedule_event(time(), 'daily', 'lto_daily_update');
         }
-        
+
         // LLMSファイルの生成は初回実行時にエラーになる可能性があるため、遅延して実行
         wp_schedule_single_event(time() + 10, 'lto_generate_initial_files');
-        
+
     } catch (Exception $e) {
         // エラーを記録
         error_log('LLM Traffic Optimizer activation error: ' . $e->getMessage());
-        
+
         // ユーザーに表示するエラーメッセージを設定
         set_transient('lto_activation_error', $e->getMessage(), 5 * 60);
     }
@@ -179,33 +179,22 @@ add_action('lto_generate_initial_files', 'lto_generate_initial_files_callback');
 
 function lto_generate_initial_files_callback() {
     try {
-        lto_debug_log('Starting initial files generation');
-        
-        // 関数が存在するか確認
-        if (!function_exists('lto_generate_llms_txt')) {
-            lto_debug_log('Function lto_generate_llms_txt does not exist');
+        // 関数の存在確認
+        if (!function_exists('lto_generate_llms_txt') || !function_exists('lto_generate_llms_full_txt')) {
+            error_log('LLM Traffic Optimizer: Required functions not loaded');
             return;
         }
-        
+
         // Create required files
         if (!file_exists(ABSPATH . 'llms.txt')) {
-            lto_debug_log('Generating llms.txt');
             lto_generate_llms_txt();
         }
 
-        if (!function_exists('lto_generate_llms_full_txt')) {
-            lto_debug_log('Function lto_generate_llms_full_txt does not exist');
-            return;
-        }
-        
         if (!file_exists(ABSPATH . 'llms-full.txt')) {
-            lto_debug_log('Generating llms-full.txt');
             lto_generate_llms_full_txt();
         }
-        
-        lto_debug_log('Completed initial files generation');
     } catch (Exception $e) {
-        lto_debug_log('Failed to generate LLMS files: ' . $e->getMessage());
+        error_log('Failed to generate LLMS files: ' . $e->getMessage());
     }
 }
 
@@ -294,3 +283,24 @@ function lto_settings_link($links) {
     array_unshift($links, $settings_link);
     return $links;
 }
+
+// プラグイン終了時にバッファを出力
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR])) {
+        // 致命的なエラーが発生した場合
+        $error_message = "Fatal error occurred: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line'];
+        error_log($error_message);
+
+        // 既存のバッファをクリア
+        ob_end_clean();
+
+        // 管理画面の場合はエラーメッセージを表示
+        if (is_admin()) {
+            echo '<div class="error"><p>LLM Traffic Optimizerでエラーが発生しました: ' . esc_html($error_message) . '</p></div>';
+        }
+    } else {
+        // 正常終了の場合はバッファを出力
+        ob_end_flush();
+    }
+});

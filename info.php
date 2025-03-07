@@ -33,6 +33,10 @@ if ($handle = opendir($plugin_dir)) {
 }
 echo "</ul>";
 
+// PHPの詳細情報
+echo "<h2>PHP詳細情報</h2>";
+phpinfo();cho "</ul>";
+
 // includes ディレクトリのファイル一覧
 $includes_dir = $plugin_dir . '/includes';
 echo "<p>includes ディレクトリが存在するか: ";
