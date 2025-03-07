@@ -38,6 +38,8 @@ add_action('admin_init', 'lto_register_settings');
 
 function lto_register_settings() {
     register_setting('lto-settings-group', 'lto_openai_api_key');
+    register_setting('lto-settings-group', 'lto_openai_model');
+    register_setting('lto-settings-group', 'lto_temperature');
     register_setting('lto-settings-group', 'lto_enable_auto_summaries');
     register_setting('lto-settings-group', 'lto_summary_frequency');
     register_setting('lto-settings-group', 'lto_summary_category');
@@ -202,6 +204,35 @@ function lto_settings_page() {
                     <td>
                         <input type="password" name="lto_openai_api_key" value="<?php echo esc_attr(get_option('lto_openai_api_key')); ?>" class="regular-text" />
                         <p class="description"><?php _e('Required for generating summary content with ChatGPT.', 'llm-traffic-optimizer'); ?></p>
+                        <button type="button" id="validate_api_key" class="button button-secondary"><?php _e('Validate API Key', 'llm-traffic-optimizer'); ?></button>
+                        <span id="api_key_status" style="margin-left: 10px;"></span>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row"><?php _e('OpenAI Model', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <select name="lto_openai_model" id="lto_openai_model">
+                            <optgroup label="<?php _e('GPT-4 Models', 'llm-traffic-optimizer'); ?>">
+                                <option value="gpt-4" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-4'); ?>><?php _e('GPT-4 (Most capable)', 'llm-traffic-optimizer'); ?></option>
+                                <option value="gpt-4-32k" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-4-32k'); ?>><?php _e('GPT-4 32k (Larger context window)', 'llm-traffic-optimizer'); ?></option>
+                            </optgroup>
+                            <optgroup label="<?php _e('GPT-3.5 Models', 'llm-traffic-optimizer'); ?>">
+                                <option value="gpt-3.5-turbo" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-3.5-turbo'); ?>><?php _e('GPT-3.5 Turbo (Default)', 'llm-traffic-optimizer'); ?></option>
+                                <option value="gpt-3.5-turbo-16k" <?php selected(get_option('lto_openai_model', 'gpt-3.5-turbo'), 'gpt-3.5-turbo-16k'); ?>><?php _e('GPT-3.5 Turbo 16k', 'llm-traffic-optimizer'); ?></option>
+                            </optgroup>
+                        </select>
+                        <p class="description"><?php _e('Select the OpenAI model to use for generating summaries. More capable models may cost more to use.', 'llm-traffic-optimizer'); ?></p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row"><?php _e('Model Parameters', 'llm-traffic-optimizer'); ?></th>
+                    <td>
+                        <label for="lto_temperature"><?php _e('Temperature:', 'llm-traffic-optimizer'); ?></label>
+                        <input type="range" id="lto_temperature" name="lto_temperature" min="0" max="2" step="0.1" value="<?php echo esc_attr(get_option('lto_temperature', '0.7')); ?>" />
+                        <span id="temperature_value"><?php echo esc_html(get_option('lto_temperature', '0.7')); ?></span>
+                        <p class="description"><?php _e('Controls randomness. Lower values (0.2) make output more focused and deterministic. Higher values (0.8) make output more random and creative.', 'llm-traffic-optimizer'); ?></p>
                     </td>
                 </tr>
                 
@@ -437,3 +468,47 @@ function lto_get_top_ai_posts($limit = 5) {
     
     return $results ? $results : array();
 }
+
+
+<script>
+jQuery(document).ready(function($) {
+    // Handle temperature slider updates
+    $('#lto_temperature').on('input', function() {
+        $('#temperature_value').text($(this).val());
+    });
+    
+    // API Key validation
+    $('#validate_api_key').on('click', function() {
+        const apiKey = $('input[name="lto_openai_api_key"]').val();
+        const statusElement = $('#api_key_status');
+        
+        if (!apiKey) {
+            statusElement.text('Please enter an API key').css('color', 'red');
+            return;
+        }
+        
+        statusElement.text('Validating...').css('color', 'blue');
+        
+        // Ajax request to validate API key
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'lto_validate_api_key',
+                api_key: apiKey,
+                nonce: '<?php echo wp_create_nonce('lto_validate_api_key_nonce'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    statusElement.text('✓ API Key is valid').css('color', 'green');
+                } else {
+                    statusElement.text('✗ ' + response.data).css('color', 'red');
+                }
+            },
+            error: function() {
+                statusElement.text('✗ Validation failed. Please try again.').css('color', 'red');
+            }
+        });
+    });
+});
+</script>
