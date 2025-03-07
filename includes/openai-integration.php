@@ -61,6 +61,8 @@ function lto_openai_api_request($prompt) {
         return new WP_Error('empty_response', __('OpenAI returned an empty response.', 'llm-traffic-optimizer'));
     }
     
+    return $body['choices'][0]['message']['content'];
+}
 
 // Function to validate OpenAI API key
 function lto_validate_api_key() {
@@ -112,6 +114,3 @@ function lto_validate_api_key() {
 
 // Register AJAX actions
 add_action('wp_ajax_lto_validate_api_key', 'lto_validate_api_key');
-
-    return $body['choices'][0]['message']['content'];
-}

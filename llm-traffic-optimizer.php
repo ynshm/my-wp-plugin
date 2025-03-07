@@ -7,6 +7,15 @@
  * License: GPL v2 or later
  */
 
+// PHP 7 互換性チェック
+if (version_compare(PHP_VERSION, '7.0.0', '<')) {
+    function lto_php_version_error() {
+        echo '<div class="error"><p>LLM Traffic Optimizer requires PHP 7.0 or higher. Your current PHP version is ' . PHP_VERSION . '. Please upgrade PHP or contact your hosting provider.</p></div>';
+    }
+    add_action('admin_notices', 'lto_php_version_error');
+    return;
+}
+
 // Make sure we don't expose any info if called directly
 if (!function_exists('add_action')) {
     echo 'Hi there! I\'m just a plugin, not much I can do when called directly.';
@@ -55,37 +64,74 @@ add_action('admin_notices', 'lto_admin_notice_missing_api_key');
 register_activation_hook(__FILE__, 'lto_activate_plugin');
 
 function lto_activate_plugin() {
-    // Create required database tables
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'lto_analytics';
+    try {
+        // Create required database tables
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'lto_analytics';
 
-    $charset_collate = $wpdb->get_charset_collate();
+        $charset_collate = $wpdb->get_charset_collate();
 
-    $sql = "CREATE TABLE $table_name (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        post_id mediumint(9) NOT NULL,
-        views int NOT NULL DEFAULT 0,
-        ai_referrals int NOT NULL DEFAULT 0,
-        last_updated datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        KEY post_id (post_id)
-    ) $charset_collate;";
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            post_id mediumint(9) NOT NULL,
+            views int NOT NULL DEFAULT 0,
+            ai_referrals int NOT NULL DEFAULT 0,
+            last_updated datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY post_id (post_id)
+        ) $charset_collate;";
 
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
 
-    // Create required directories
-    if (!file_exists(ABSPATH . 'llms.txt')) {
-        lto_generate_llms_txt();
+        // テーブル作成の確認
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            throw new Exception("Failed to create database table: $table_name");
+        }
+
+        // Schedule daily cron jobs
+        if (!wp_next_scheduled('lto_daily_update')) {
+            wp_schedule_event(time(), 'daily', 'lto_daily_update');
+        }
+        
+        // LLMSファイルの生成は初回実行時にエラーになる可能性があるため、遅延して実行
+        wp_schedule_single_event(time() + 10, 'lto_generate_initial_files');
+        
+    } catch (Exception $e) {
+        // エラーを記録
+        error_log('LLM Traffic Optimizer activation error: ' . $e->getMessage());
+        
+        // ユーザーに表示するエラーメッセージを設定
+        set_transient('lto_activation_error', $e->getMessage(), 5 * 60);
     }
+}
 
-    if (!file_exists(ABSPATH . 'llms-full.txt')) {
-        lto_generate_llms_full_txt();
+// 遅延実行のためのフック
+add_action('lto_generate_initial_files', 'lto_generate_initial_files_callback');
+
+function lto_generate_initial_files_callback() {
+    try {
+        // Create required files
+        if (!file_exists(ABSPATH . 'llms.txt')) {
+            lto_generate_llms_txt();
+        }
+
+        if (!file_exists(ABSPATH . 'llms-full.txt')) {
+            lto_generate_llms_full_txt();
+        }
+    } catch (Exception $e) {
+        error_log('Failed to generate LLMS files: ' . $e->getMessage());
     }
+}
 
-    // Schedule daily cron jobs
-    if (!wp_next_scheduled('lto_daily_update')) {
-        wp_schedule_event(time(), 'daily', 'lto_daily_update');
+// アクティベーションエラーを表示
+add_action('admin_notices', 'lto_display_activation_error');
+
+function lto_display_activation_error() {
+    $error = get_transient('lto_activation_error');
+    if ($error) {
+        echo '<div class="error"><p>LLM Traffic Optimizer activation error: ' . esc_html($error) . '</p></div>';
+        delete_transient('lto_activation_error');
     }
 }
 

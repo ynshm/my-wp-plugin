@@ -468,7 +468,7 @@ function lto_get_top_ai_posts($limit = 5) {
     
     return $results ? $results : array();
 }
-
+?>
 
 <script>
 jQuery(document).ready(function($) {
