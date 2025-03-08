@@ -120,6 +120,18 @@ function lto_enqueue_admin_assets($hook) {
     }
 }
 
+// OpenAI APIリクエスト用の関数
+if (!function_exists('lto_openai_api_request')) {
+    function lto_openai_api_request($prompt) {
+        return lto_call_openai_api($prompt);
+    }
+}
+
+// デバッグ定数
+if (!defined('LTO_DEBUG')) {
+    define('LTO_DEBUG', true);
+}
+
 // 管理者向けのメッセージ表示機能
 function lto_admin_notice() {
     $screen = get_current_screen();

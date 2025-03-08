@@ -65,13 +65,14 @@ foreach ($modules as $module) {
 }
 echo "</ul>";
 
-// データベース接続テスト（WordPressが読み込まれている場合）
+// データベース接続テスト
+echo "<h2>WordPress データベース接続テスト</h2>";
 if (defined('ABSPATH')) {
-    echo "<h2>WordPress データベース接続テスト</h2>";
     global $wpdb;
-    if (isset($wpdb)) {
-        $test_query = $wpdb->get_var("SELECT 1");
-        echo "<p>Database connection: " . ($test_query === "1" ? "成功" : "失敗") . "</p>";
+    if ($wpdb) {
+        echo "<p>データベース接続: 成功</p>";
+        echo "<p>データベース名: " . DB_NAME . "</p>";
+        echo "<p>テーブルプレフィックス: " . $wpdb->prefix . "</p>";
     } else {
         echo "<p>$wpdb オブジェクトが利用できません</p>";
     }

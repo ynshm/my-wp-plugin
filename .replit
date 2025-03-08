@@ -1,5 +1,4 @@
-[nix]
-channel = "stable-24_05"
+
 run = "php -S 0.0.0.0:8080 -t ."
 entrypoint = "llm-traffic-optimizer.php"
 

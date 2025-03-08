@@ -544,22 +544,6 @@ function lto_get_top_pages($top_posts_count){
 }
 
 
-// 人気記事のまとめ記事を生成
-//This function is replaced by the new lto_generate_popular_summary() function above.
-// function lto_generate_popular_summary() { ... }
-
-
-// カテゴリ別のまとめ記事を生成
-//This function is replaced by the new lto_generate_category_summary() function above.
-// function lto_generate_category_summary($category_id) { ... }
-
-
-// AJAX経由で手動でまとめ記事を生成するためのアクション
-//This function is replaced by the new lto_ajax_generate_summary() function above.
-// add_action('wp_ajax_lto_generate_summary', 'lto_ajax_generate_summary');
-// function lto_ajax_generate_summary() { ... }
-
-
 // 新しい投稿が公開されたときにサマリーを自動生成
 add_action('transition_post_status', 'lto_auto_generate_summary', 10, 3);
 
@@ -704,6 +688,59 @@ if (!defined('ABSPATH')) {
 // OpenAI統合ファイルの読み込みを確認
 if (!function_exists('lto_openai_api_request')) {
     require_once dirname(__FILE__) . '/openai-integration.php';
+}
+
+// アクセスを記録するアクション
+add_action('wp_footer', 'lto_track_page_view');
+
+// AIからの参照かどうかを判定する関数
+function lto_is_ai_referral() {
+    // ユーザーエージェントを取得
+    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+
+    // リファラーを取得
+    $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
+
+    // AIボットのリスト
+    $ai_bots = array(
+        'GPTBot', 'ChatGPT', 'googlebot', 'bingbot', 'Baiduspider',
+        'Anthropic', 'Claude', 'CCBot', 'facebookexternalhit'
+    );
+
+    // AIドメインのリスト
+    $ai_domains = array(
+        'openai.com', 'bing.com', 'google.com', 'facebook.com',
+        'anthropic.com', 'claude.ai', 'gemini.google.com'
+    );
+
+    // ユーザーエージェントにAIボットの名前が含まれているか確認
+    foreach ($ai_bots as $bot) {
+        if (stripos($user_agent, $bot) !== false) {
+            return true;
+        }
+    }
+
+    // リファラーにAIドメインが含まれているか確認
+    foreach ($ai_domains as $domain) {
+        if (stripos($referer, $domain) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function lto_track_page_view() {
+    // 投稿ページのみトラッキング
+    if (!is_singular('post')) {
+        return;
+    }
+
+    global $post, $wpdb;
+    $table_name = $wpdb->prefix . 'lto_analytics';
+
+    // ユーザーエージェントからAIアクセスを判定
+    $is_ai_referral = lto_is_ai_referral();
 }
 
 ?>
