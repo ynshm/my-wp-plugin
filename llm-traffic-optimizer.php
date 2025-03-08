@@ -33,12 +33,40 @@ function lto_load_file($file) {
     return false;
 }
 
-// 基本機能のみロード - エラーが発生してもプラグインが完全に機能停止しないように
+// 必要な依存関係を正しい順序でロード
+// まずOpenAI統合をロード（他の機能が依存している）
+if (!lto_load_file('includes/openai-integration.php')) {
+    error_log('LLM Traffic Optimizer: OpenAI統合ファイルのロードに失敗しました');
+}
+
+// 次に管理機能と設定をロード
 lto_load_file('includes/admin-menu.php');
 lto_load_file('includes/admin-settings.php');
-lto_load_file('includes/openai-integration.php');
+
+// LLMs.txtジェネレータをロード
 lto_load_file('includes/llms-txt-generator.php');
-lto_load_file('includes/summary-generator.php');
+
+// 最後にサマリージェネレータをロード（OpenAI依存）
+if (!lto_load_file('includes/summary-generator.php')) {
+    error_log('LLM Traffic Optimizer: サマリー生成機能のロードに失敗しました');
+}
+
+// 関数が正常にロードされたか確認
+if (LTO_DEBUG) {
+    $required_functions = [
+        'lto_call_openai_api',
+        'lto_generate_openai_content',
+        'lto_generate_post_summary',
+        'lto_generate_popular_summary',
+        'lto_create_summary_post'
+    ];
+    
+    foreach ($required_functions as $function) {
+        if (!function_exists($function)) {
+            error_log('LLM Traffic Optimizer: 必要な関数が定義されていません: ' . $function);
+        }
+    }
+}
 
 // 初期化段階でのローディング
 function lto_init() {

@@ -7,8 +7,13 @@ if (!defined('ABSPATH')) {
     exit; // 直接アクセス禁止
 }
 
+// グローバル関数定義であることを明示
+global $lto_api_loaded;
+$lto_api_loaded = true;
+
 // OpenAI APIリクエスト関数
-function lto_call_openai_api($prompt) {
+if (!function_exists('lto_call_openai_api')) {
+    function lto_call_openai_api($prompt) {
     // APIキーの取得
     $api_key = get_option('lto_openai_api_key', '');
 
@@ -64,6 +69,7 @@ function lto_call_openai_api($prompt) {
     } else {
         return new WP_Error('no_content', __('APIからのレスポンスにコンテンツが含まれていませんでした。', 'llm-traffic-optimizer'));
     }
+}
 }
 
 // OpenAIモデルリストの取得

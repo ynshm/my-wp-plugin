@@ -7,6 +7,22 @@ if (!defined('ABSPATH')) {
     exit; // 直接アクセス禁止
 }
 
+// OpenAI統合が読み込まれていることを確認
+if (!function_exists('lto_call_openai_api')) {
+    require_once dirname(__FILE__) . '/openai-integration.php';
+}
+
+// OpenAI APIリクエスト用の関数
+if (!function_exists('lto_generate_openai_content')) {
+    function lto_generate_openai_content($prompt) {
+        if (!function_exists('lto_call_openai_api')) {
+            error_log('LLM Traffic Optimizer: OpenAI APIの関数が読み込まれていません');
+            return new WP_Error('missing_function', __('OpenAI API functions are not loaded.', 'llm-traffic-optimizer'));
+        }
+        return lto_call_openai_api($prompt);
+    }
+}
+
 // 投稿の要約を生成する
 function lto_generate_post_summary($post_id) {
     $post = get_post($post_id);
