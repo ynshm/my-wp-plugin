@@ -15,3 +15,7 @@ pattern = "**/*.php"
 
 [languages.php.languageServer]
 start = "php-language-server"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
