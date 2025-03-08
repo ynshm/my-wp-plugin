@@ -577,3 +577,124 @@ function lto_add_original_post_link($content) {
     return $content;
 }
 ?>
+<?php
+/**
+ * 人気記事のサマリーページを生成する機能
+ */
+
+if (!defined('ABSPATH')) {
+    exit; // 直接アクセス禁止
+}
+
+// 人気記事のサマリーを生成
+function lto_generate_popular_summary() {
+    // OpenAI APIキーがあるか確認
+    $api_key = get_option('lto_openai_api_key');
+    if (empty($api_key)) {
+        return new WP_Error('missing_api_key', __('OpenAI API key is not set.', 'llm-traffic-optimizer'));
+    }
+
+    // 人気の投稿を取得
+    $popular_posts = get_posts(array(
+        'post_type' => 'post',
+        'post_status' => 'publish',
+        'posts_per_page' => 5,
+        'orderby' => 'comment_count',
+        'order' => 'DESC'
+    ));
+
+    if (empty($popular_posts)) {
+        return new WP_Error('no_posts', __('No popular posts found.', 'llm-traffic-optimizer'));
+    }
+
+    // 投稿情報を収集
+    $posts_data = array();
+    foreach ($popular_posts as $post) {
+        $posts_data[] = array(
+            'title' => $post->post_title,
+            'url' => get_permalink($post->ID),
+            'excerpt' => get_the_excerpt($post->ID)
+        );
+    }
+
+    // AIにサマリーを生成させるためのプロンプト
+    $prompt = "以下は私のブログの人気記事です。このリストから、これらの記事を紹介するまとめ記事を生成してください。各記事について簡潔な説明を含め、読者がリンクをクリックして詳細を読みたくなるように魅力的な内容にしてください。\n\n";
+
+    foreach ($posts_data as $i => $post) {
+        $prompt .= ($i + 1) . ". タイトル: " . $post['title'] . "\n";
+        $prompt .= "   URL: " . $post['url'] . "\n";
+        $prompt .= "   概要: " . $post['excerpt'] . "\n\n";
+    }
+
+    $prompt .= "最後に、これらの記事を読んだ後に読者が取るべきアクションについての簡単な提案を含めてください。";
+
+    // OpenAI APIにリクエスト
+    $summary = lto_openai_api_request($prompt);
+
+    if (is_wp_error($summary)) {
+        return $summary;
+    }
+
+    // サマリーページのタイトルと内容
+    $page_title = '人気記事まとめ';
+    $page_content = $summary;
+
+    // サマリーページが既に存在するか確認
+    $existing_page = get_page_by_title($page_title, OBJECT, 'page');
+
+    if ($existing_page) {
+        // 既存ページを更新
+        $page_data = array(
+            'ID' => $existing_page->ID,
+            'post_content' => $page_content,
+            'post_modified' => current_time('mysql'),
+            'post_modified_gmt' => current_time('mysql', 1)
+        );
+
+        $result = wp_update_post($page_data);
+    } else {
+        // 新しいページを作成
+        $page_data = array(
+            'post_title' => $page_title,
+            'post_content' => $page_content,
+            'post_status' => 'publish',
+            'post_type' => 'page',
+            'comment_status' => 'closed'
+        );
+
+        $result = wp_insert_post($page_data);
+    }
+
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+    return $result;
+}
+
+// AJAX経由でサマリーを生成
+add_action('wp_ajax_lto_generate_summary', 'lto_ajax_generate_summary');
+
+function lto_ajax_generate_summary() {
+    // セキュリティチェック
+    check_ajax_referer('lto_ajax_nonce', 'nonce');
+    
+    // 権限チェック
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(__('You do not have sufficient permissions to perform this action.', 'llm-traffic-optimizer'));
+        return;
+    }
+    
+    // サマリー生成
+    $result = lto_generate_popular_summary();
+    
+    if (is_wp_error($result)) {
+        wp_send_json_error($result->get_error_message());
+    } else {
+        $page_url = get_permalink($result);
+        wp_send_json_success(array(
+            'message' => __('Summary page generated successfully!', 'llm-traffic-optimizer'),
+            'page_url' => $page_url
+        ));
+    }
+}

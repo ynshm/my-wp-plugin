@@ -37,6 +37,8 @@ function lto_load_file($file) {
 lto_load_file('includes/admin-menu.php');
 lto_load_file('includes/admin-settings.php');
 lto_load_file('includes/openai-integration.php');
+lto_load_file('includes/llms-txt-generator.php');
+lto_load_file('includes/summary-generator.php');
 
 // 初期化段階でのローディング
 function lto_init() {
