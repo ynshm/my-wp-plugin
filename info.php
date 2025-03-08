@@ -35,7 +35,7 @@ echo "</ul>";
 
 // PHPの詳細情報
 echo "<h2>PHP詳細情報</h2>";
-phpinfo();cho "</ul>";
+phpinfo();
 
 // includes ディレクトリのファイル一覧
 $includes_dir = $plugin_dir . '/includes';
@@ -76,7 +76,4 @@ if (defined('ABSPATH')) {
         echo "<p>$wpdb オブジェクトが利用できません</p>";
     }
 }
-
-// 完全なPHP情報（セキュリティのためコメントアウト）
-// phpinfo();
 ?>
