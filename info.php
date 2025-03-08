@@ -49,3 +49,56 @@ echo "<li>関数の定義に構文エラーがないか</li>";
 echo "<li>ファイルの読み込み順序が正しいか</li>";
 echo "</ol>";
 ?>
+<?php
+/**
+ * Function test file for LLM Traffic Optimizer
+ */
+
+// WordPress環境のロード（直接アクセス用）
+$wp_load_path = dirname(dirname(dirname(__FILE__))) . '/wp-load.php';
+if (file_exists($wp_load_path)) {
+    require_once $wp_load_path;
+} else {
+    echo "WordPress環境が見つかりません。";
+    exit;
+}
+
+// プラグインのパスを設定
+define('LTO_PLUGIN_DIR', plugin_dir_path(__FILE__));
+
+// 必要なファイルを直接インクルード
+require_once 'includes/openai-integration.php';
+require_once 'includes/summary-generator.php';
+
+echo "<h1>LLM Traffic Optimizer 関数テスト</h1>";
+
+// 関数のチェック
+$functions = [
+    'lto_call_openai_api',
+    'lto_generate_openai_content',
+    'lto_generate_post_summary',
+    'lto_generate_popular_summary',
+    'lto_create_summary_post'
+];
+
+foreach ($functions as $function) {
+    if (function_exists($function)) {
+        echo "<p>✅ 関数 {$function} は定義されています</p>";
+    } else {
+        echo "<p>❌ 関数 {$function} は定義されていません</p>";
+    }
+}
+
+// デバッグ情報
+echo "<h2>デバッグ情報</h2>";
+echo "<p>PHP バージョン: " . PHP_VERSION . "</p>";
+echo "<p>インクルードされているファイル:</p>";
+echo "<ul>";
+$included_files = get_included_files();
+foreach ($included_files as $file) {
+    if (strpos($file, 'llm-traffic-optimizer') !== false) {
+        echo "<li>" . $file . "</li>";
+    }
+}
+echo "</ul>";
+?>

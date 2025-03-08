@@ -37,6 +37,12 @@ function lto_load_file($file) {
 // まずOpenAI統合をロード（他の機能が依存している）
 if (!lto_load_file('includes/openai-integration.php')) {
     error_log('LLM Traffic Optimizer: OpenAI統合ファイルのロードに失敗しました');
+} else {
+    // OpenAI関数が読み込まれているか確認
+    if (!function_exists('lto_call_openai_api')) {
+        error_log('LLM Traffic Optimizer: lto_call_openai_api関数が読み込まれていません');
+        include_once(LTO_PLUGIN_DIR . 'includes/openai-integration.php');
+    }
 }
 
 // 次に管理機能と設定をロード
@@ -49,6 +55,14 @@ lto_load_file('includes/llms-txt-generator.php');
 // 最後にサマリージェネレータをロード（OpenAI依存）
 if (!lto_load_file('includes/summary-generator.php')) {
     error_log('LLM Traffic Optimizer: サマリー生成機能のロードに失敗しました');
+} else {
+    // サマリー関数が読み込まれているか確認
+    if (!function_exists('lto_generate_post_summary') || 
+        !function_exists('lto_generate_popular_summary') || 
+        !function_exists('lto_create_summary_post')) {
+        error_log('LLM Traffic Optimizer: 一部のサマリー関数が読み込まれていません');
+        include_once(LTO_PLUGIN_DIR . 'includes/summary-generator.php');
+    }
 }
 
 // 関数が正常にロードされたか確認

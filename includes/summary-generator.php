@@ -13,14 +13,16 @@ if (!function_exists('lto_call_openai_api')) {
 }
 
 // OpenAI APIリクエスト用の関数
-if (!function_exists('lto_generate_openai_content')) {
-    function lto_generate_openai_content($prompt) {
+function lto_generate_openai_content($prompt) {
+    if (!function_exists('lto_call_openai_api')) {
+        error_log('LLM Traffic Optimizer: OpenAI APIの関数が読み込まれていません');
+        require_once dirname(__FILE__) . '/openai-integration.php';
+        
         if (!function_exists('lto_call_openai_api')) {
-            error_log('LLM Traffic Optimizer: OpenAI APIの関数が読み込まれていません');
             return new WP_Error('missing_function', __('OpenAI API functions are not loaded.', 'llm-traffic-optimizer'));
         }
-        return lto_call_openai_api($prompt);
     }
+    return lto_call_openai_api($prompt);
 }
 
 // 投稿の要約を生成する

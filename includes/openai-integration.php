@@ -14,62 +14,62 @@ $lto_api_loaded = true;
 // OpenAI APIリクエスト関数
 if (!function_exists('lto_call_openai_api')) {
     function lto_call_openai_api($prompt) {
-    // APIキーの取得
-    $api_key = get_option('lto_openai_api_key', '');
+        // APIキーの取得
+        $api_key = get_option('lto_openai_api_key', '');
 
-    if (empty($api_key)) {
-        return new WP_Error('missing_api_key', __('OpenAI APIキーが設定されていません。', 'llm-traffic-optimizer'));
+        if (empty($api_key)) {
+            return new WP_Error('missing_api_key', __('OpenAI APIキーが設定されていません。', 'llm-traffic-optimizer'));
+        }
+
+        // APIモデルとパラメータの取得
+        $model = get_option('lto_openai_model', 'gpt-3.5-turbo');
+        $temperature = (float) get_option('lto_temperature', 0.7);
+
+        // リクエストデータの準備
+        $request_data = array(
+            'model' => $model,
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'temperature' => $temperature,
+            'max_tokens' => 1500
+        );
+
+        // APIリクエストの実行
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($request_data),
+            'timeout' => 60
+        ));
+
+        // レスポンスの処理
+        if (is_wp_error($response)) {
+            error_log('OpenAI API error: ' . $response->get_error_message());
+            return new WP_Error('api_error', __('OpenAI APIリクエストに失敗しました: ', 'llm-traffic-optimizer') . $response->get_error_message());
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($response_code !== 200) {
+            $error_message = isset($response_body['error']['message']) ? $response_body['error']['message'] : __('不明なエラーが発生しました。', 'llm-traffic-optimizer');
+            error_log('OpenAI API error: ' . $error_message);
+            return new WP_Error('api_error', __('OpenAI APIエラー: ', 'llm-traffic-optimizer') . $error_message);
+        }
+
+        // 成功時の処理
+        if (isset($response_body['choices'][0]['message']['content'])) {
+            return $response_body['choices'][0]['message']['content'];
+        } else {
+            return new WP_Error('no_content', __('APIからのレスポンスにコンテンツが含まれていませんでした。', 'llm-traffic-optimizer'));
+        }
     }
-
-    // APIモデルとパラメータの取得
-    $model = get_option('lto_openai_model', 'gpt-3.5-turbo');
-    $temperature = (float) get_option('lto_temperature', 0.7);
-
-    // リクエストデータの準備
-    $request_data = array(
-        'model' => $model,
-        'messages' => array(
-            array(
-                'role' => 'user',
-                'content' => $prompt
-            )
-        ),
-        'temperature' => $temperature,
-        'max_tokens' => 1500
-    );
-
-    // APIリクエストの実行
-    $response = wp_remote_post('https://api.openai.com/v1/chat/completions', array(
-        'headers' => array(
-            'Authorization' => 'Bearer ' . $api_key,
-            'Content-Type' => 'application/json'
-        ),
-        'body' => json_encode($request_data),
-        'timeout' => 60
-    ));
-
-    // レスポンスの処理
-    if (is_wp_error($response)) {
-        error_log('OpenAI API error: ' . $response->get_error_message());
-        return new WP_Error('api_error', __('OpenAI APIリクエストに失敗しました: ', 'llm-traffic-optimizer') . $response->get_error_message());
-    }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    $response_body = json_decode(wp_remote_retrieve_body($response), true);
-
-    if ($response_code !== 200) {
-        $error_message = isset($response_body['error']['message']) ? $response_body['error']['message'] : __('不明なエラーが発生しました。', 'llm-traffic-optimizer');
-        error_log('OpenAI API error: ' . $error_message);
-        return new WP_Error('api_error', __('OpenAI APIエラー: ', 'llm-traffic-optimizer') . $error_message);
-    }
-
-    // 成功時の処理
-    if (isset($response_body['choices'][0]['message']['content'])) {
-        return $response_body['choices'][0]['message']['content'];
-    } else {
-        return new WP_Error('no_content', __('APIからのレスポンスにコンテンツが含まれていませんでした。', 'llm-traffic-optimizer'));
-    }
-}
 }
 
 // OpenAIモデルリストの取得
