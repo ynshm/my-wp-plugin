@@ -132,6 +132,12 @@ if (!defined('LTO_DEBUG')) {
     define('LTO_DEBUG', true);
 }
 
+// ファイルが存在するか確認する関数
+function lto_file_exists($file) {
+    $file_path = LTO_PLUGIN_DIR . $file;
+    return file_exists($file_path);
+}
+
 // 管理者向けのメッセージ表示機能
 function lto_admin_notice() {
     $screen = get_current_screen();
