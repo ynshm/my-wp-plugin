@@ -1,0 +1,21 @@
+
+# Enable the RewriteEngine
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+
+# If the request is for a file that exists, serve it directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Otherwise, redirect to index.php
+RewriteRule ^ index.php [L]
+</IfModule>
+
+# PHP settings
+<IfModule mod_php7.c>
+php_value display_errors 1
+php_value display_startup_errors 1
+php_value error_reporting E_ALL
+</IfModule>
