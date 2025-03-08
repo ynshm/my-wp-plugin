@@ -160,7 +160,8 @@ function lto_ajax_regenerate_llms_txt() {
 }
 
 // 管理者向けにLLMS.txtの内容を手動で更新するためのアクション
-add_action('wp_ajax_lto_regenerate_llms_txt', 'lto_ajax_regenerate_llms_txt');
+// 注：すでに上で登録済みなので重複を避けるためコメントアウト
+// add_action('wp_ajax_lto_regenerate_llms_txt', 'lto_ajax_regenerate_llms_txt');
 
 // 投稿が公開されたとき、LLMS.txtを更新
 add_action('publish_post', 'lto_update_llms_on_publish');
