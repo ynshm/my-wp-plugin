@@ -15,6 +15,3 @@ pattern = "**/*.php"
 
 [languages.php.languageServer]
 start = "php-language-server"
-
-[languages.php.nix]
-packages = ["php74"]
