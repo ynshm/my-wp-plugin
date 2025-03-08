@@ -1,47 +1,50 @@
-
 <?php
 /**
- * OpenAI API統合機能
+ * OpenAI API との連携機能
  */
 
 if (!defined('ABSPATH')) {
     exit; // 直接アクセス禁止
 }
 
-// OpenAIのAPIリクエスト関数
-function lto_openai_api_request($prompt) {
-    // APIキーを取得
-    $api_key = get_option('lto_openai_api_key');
+// OpenAI APIを呼び出す関数
+function lto_call_openai_api($prompt, $max_tokens = 1000) {
+    // API キーの取得
+    $api_key = get_option('lto_openai_api_key', '');
 
     if (empty($api_key)) {
-        return new WP_Error('missing_api_key', __('OpenAI API key is required.', 'llm-traffic-optimizer'));
+        return new WP_Error('missing_api_key', __('OpenAI API key is not set.', 'llm-traffic-optimizer'));
     }
 
-    // リクエストの準備
+    // モデルと温度の取得
+    $model = get_option('lto_openai_model', 'gpt-3.5-turbo');
+    $temperature = (float) get_option('lto_temperature', 0.7);
+
+    // リクエストデータの準備
     $request_args = array(
         'headers' => array(
             'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json'
         ),
         'body' => json_encode(array(
-            'model' => get_option('lto_openai_model', 'gpt-3.5-turbo'),
+            'model' => $model,
             'messages' => array(
                 array(
                     'role' => 'system',
-                    'content' => 'You are a skilled content writer and SEO specialist creating high-quality, informative summaries and guides for a WordPress website.'
+                    'content' => 'あなたはプロのコンテンツライターです。情報を要約して、読みやすく、わかりやすい日本語でまとめてください。'
                 ),
                 array(
                     'role' => 'user',
                     'content' => $prompt
                 )
             ),
-            'max_tokens' => 2500,
-            'temperature' => (float) get_option('lto_temperature', 0.7)
+            'max_tokens' => $max_tokens,
+            'temperature' => $temperature
         )),
         'timeout' => 60
     );
 
-    // APIリクエスト実行
+    // APIリクエストの送信
     $response = wp_remote_post('https://api.openai.com/v1/chat/completions', $request_args);
 
     // エラーチェック
@@ -72,7 +75,60 @@ function lto_openai_api_request($prompt) {
     return $body['choices'][0]['message']['content'];
 }
 
-// APIキーの検証関数
+// OpenAIモデルリストの取得
+function lto_get_available_models() {
+    // API キーの取得
+    $api_key = get_option('lto_openai_api_key', '');
+
+    if (empty($api_key)) {
+        return array();
+    }
+
+    // リクエストデータの準備
+    $request_args = array(
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $api_key,
+        ),
+        'timeout' => 15
+    );
+
+    // APIリクエストの送信
+    $response = wp_remote_get('https://api.openai.com/v1/models', $request_args);
+
+    // エラーチェック
+    if (is_wp_error($response)) {
+        return array();
+    }
+
+    $response_code = wp_remote_retrieve_response_code($response);
+
+    if ($response_code !== 200) {
+        return array();
+    }
+
+    // レスポンスの処理
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+
+    if (empty($body['data'])) {
+        return array();
+    }
+
+    // 使用可能なGPTモデルをフィルタリング
+    $gpt_models = array();
+
+    foreach ($body['data'] as $model) {
+        $id = $model['id'];
+
+        // GPTモデルのみをフィルタリング
+        if (strpos($id, 'gpt-') === 0) {
+            $gpt_models[$id] = $id;
+        }
+    }
+
+    return $gpt_models;
+}
+
+// APIキーの検証関数 (unchanged)
 function lto_validate_api_key($api_key) {
     if (empty($api_key)) {
         return new WP_Error('empty_api_key', __('API key cannot be empty', 'llm-traffic-optimizer'));
@@ -117,7 +173,7 @@ function lto_validate_api_key($api_key) {
     }
 }
 
-// AJAX経由でAPIキーを検証するためのエンドポイント
+// AJAX経由でAPIキーを検証するためのエンドポイント (unchanged)
 add_action('wp_ajax_lto_validate_api_key', 'lto_ajax_validate_api_key');
 
 function lto_ajax_validate_api_key() {
@@ -145,18 +201,11 @@ function lto_ajax_validate_api_key() {
     }
 }
 
-// OpenAIモデルリストの取得
-function lto_get_openai_models() {
-    return array(
-        'gpt-4o' => 'GPT-4o',
-        'gpt-4-turbo' => 'GPT-4 Turbo',
-        'gpt-4' => 'GPT-4',
-        'gpt-3.5-turbo' => 'GPT-3.5 Turbo',
-        'gpt-3.5-turbo-16k' => 'GPT-3.5 Turbo 16K'
-    );
-}
+// OpenAIモデルリストの取得 (Replaced with lto_get_available_models)
+// function lto_get_openai_models() { ... }
 
-// モデル設定の保存
+
+// モデル設定の保存 (unchanged)
 add_action('wp_ajax_lto_save_model_settings', 'lto_ajax_save_model_settings');
 
 function lto_ajax_save_model_settings() {
@@ -174,8 +223,8 @@ function lto_ajax_save_model_settings() {
     $temperature = isset($_POST['temperature']) ? (float) $_POST['temperature'] : 0.7;
     
     // 値の検証
-    $available_models = array_keys(lto_get_openai_models());
-    if (!in_array($model, $available_models)) {
+    $available_models = lto_get_available_models(); // Use the new function to get models
+    if (!in_array($model, array_keys($available_models))) {
         $model = 'gpt-3.5-turbo'; // デフォルトに戻す
     }
     
@@ -189,3 +238,5 @@ function lto_ajax_save_model_settings() {
     
     wp_send_json_success(__('Model settings saved successfully.', 'llm-traffic-optimizer'));
 }
+
+?>
