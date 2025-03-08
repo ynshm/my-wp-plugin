@@ -46,7 +46,76 @@ jQuery(document).ready(function($) {
     setTimeout(equalizeCardHeights, 100);
 
 
-    // APIキー検証 (from original code)
+    // APIキー検証
+    $('#lto-validate-api-key').on('click', function() {
+        const apiKey = $('#lto-openai-api-key').val();
+        const resultElem = $('#lto-api-validation-result');
+
+        if (!apiKey) {
+            resultElem.html('<span style="color: red;">APIキーを入力してください</span>');
+            return;
+        }
+
+        $(this).prop('disabled', true).text('検証中...');
+        resultElem.html('<span style="color: blue;">APIキーを検証中...</span>');
+
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'lto_validate_api_key',
+                api_key: apiKey,
+                nonce: ltoAjax.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    resultElem.html('<span style="color: green;">' + response.data + '</span>');
+                } else {
+                    resultElem.html('<span style="color: red;">' + response.data + '</span>');
+                }
+            },
+            error: function() {
+                resultElem.html('<span style="color: red;">サーバーエラーが発生しました。後でもう一度お試しください。</span>');
+            },
+            complete: function() {
+                $('#lto-validate-api-key').prop('disabled', false).text('検証と保存');
+            }
+        });
+    });
+
+    // モデル設定の保存
+    $('#lto-save-model-settings').on('click', function() {
+        const model = $('#lto-openai-model').val();
+        const temperature = $('#lto-temperature').val();
+        const resultElem = $('#lto-model-settings-result');
+
+        $(this).prop('disabled', true).text('保存中...');
+        resultElem.html('<span style="color: blue;">設定を保存中...</span>');
+
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'lto_save_model_settings',
+                model: model,
+                temperature: temperature,
+                nonce: ltoAjax.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    resultElem.html('<span style="color: green;">' + response.data + '</span>');
+                } else {
+                    resultElem.html('<span style="color: red;">' + response.data + '</span>');
+                }
+            },
+            error: function() {
+                resultElem.html('<span style="color: red;">サーバーエラーが発生しました。後でもう一度お試しください。</span>');
+            },
+            complete: function() {
+                $('#lto-save-model-settings').prop('disabled', false).text('モデル設定を保存');
+            }
+        });
+    });検証 (from original code)
     $('#lto-validate-api-key').on('click', function() {
         const apiKey = $('input[name="lto_openai_api_key"]').val();
         const resultElement = $('#lto-api-key-validation-result');

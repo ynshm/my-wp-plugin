@@ -35,7 +35,8 @@ function lto_load_file($file) {
 
 // 基本機能のみロード - エラーが発生してもプラグインが完全に機能停止しないように
 lto_load_file('includes/admin-menu.php');
-lto_load_file('includes/admin-settings.php'); // Added include for admin settings
+lto_load_file('includes/admin-settings.php');
+lto_load_file('includes/openai-integration.php');
 
 // 初期化段階でのローディング
 function lto_init() {
