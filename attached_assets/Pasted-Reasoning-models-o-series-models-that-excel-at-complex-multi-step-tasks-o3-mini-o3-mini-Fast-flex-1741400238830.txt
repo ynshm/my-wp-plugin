@@ -1,0 +1,97 @@
+Reasoning models
+o-series models that excel at complex, multi-step tasks.
+o3-mini
+o3-mini
+Fast, flexible, intelligent reasoning model
+o1
+o1
+High-intelligence reasoning model
+o1-mini
+o1-mini
+A faster, more affordable reasoning model than o1
+Flagship chat models
+Our versatile, high-intelligence flagship models.
+gpt-4.5-preview
+GPT-4.5 Preview
+Largest and most capable GPT model
+gpt-4o
+GPT-4o
+Fast, intelligent, flexible GPT model
+gpt-4o-audio-preview
+GPT-4o Audio
+GPT-4o models capable of audio inputs and outputs
+Cost-optimized models
+Smaller, faster models that cost less to run.
+gpt-4o-mini
+GPT-4o mini
+Fast, affordable small model for focused tasks
+gpt-4o-mini-audio-preview
+GPT-4o mini Audio
+Smaller model capable of audio inputs and outputs
+Realtime models
+Models capable of realtime text and audio inputs and outputs.
+gpt-4o-realtime-preview
+GPT-4o Realtime
+Model capable of realtime text and audio inputs and outputs
+gpt-4o-mini-realtime-preview
+GPT-4o mini Realtime
+Smaller realtime model for text and audio inputs and outputs
+Older GPT models
+Supported older versions of our general purpose and chat models.
+gpt-4-turbo
+GPT-4 Turbo
+An older high-intelligence GPT model
+gpt-4
+GPT-4
+An older high-intelligence GPT model
+gpt-3.5-turbo
+GPT-3.5 Turbo
+Legacy GPT model for cheaper chat and non-chat tasks
+DALL·E
+Models that can generate and edit images, given a natural language prompt.
+dall-e-3
+DALL·E 3
+Our latest image generation model
+dall-e-2
+DALL·E 2
+Our first image generation model
+Text-to-speech
+Models that can convert text into natural sounding spoken audio.
+tts-1
+TTS-1
+Text-to-speech model optimized for speed
+tts-1-hd
+TTS-1 HD
+Text-to-speech model optimized for quality
+Whisper
+Model that can transcribe and translate audio into text.
+whisper-1
+Whisper
+General-purpose speech recognition model
+Embeddings
+A set of models that can convert text into vector representations.
+text-embedding-3-small
+text-embedding-3-small
+Small embedding model
+text-embedding-3-large
+text-embedding-3-large
+Most capable embedding model
+text-embedding-ada-002
+text-embedding-ada-002
+Older embedding model
+Moderation
+Fine-tuned models that detect whether input may be sensitive or unsafe.
+omni-moderation-latest
+omni-moderation
+Identify potentially harmful content in text and images
+text-moderation-latest
+text-moderation
+Previous generation text-only moderation model
+GPT base models
+Older models that aren't trained with instruction following.
+babbage-002
+babbage-002
+Replacement for the GPT-3 ada and babbage base models
+davinci-002
+davinci-002
+Replacement for the GPT-3 curie and davinci base models
