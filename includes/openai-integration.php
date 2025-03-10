@@ -1,3 +1,4 @@
+
 <?php
 /**
  * OpenAI API 統合機能
@@ -69,6 +70,17 @@ if (!function_exists('lto_call_openai_api')) {
         } else {
             return new WP_Error('no_content', __('APIからのレスポンスにコンテンツが含まれていませんでした。', 'llm-traffic-optimizer'));
         }
+    }
+}
+
+// OpenAI APIリクエスト用の関数
+if (!function_exists('lto_generate_openai_content')) {
+    function lto_generate_openai_content($prompt) {
+        if (!function_exists('lto_call_openai_api')) {
+            error_log('LLM Traffic Optimizer: OpenAI APIの関数が読み込まれていません');
+            return new WP_Error('missing_function', __('OpenAI API functions are not loaded.', 'llm-traffic-optimizer'));
+        }
+        return lto_call_openai_api($prompt);
     }
 }
 
@@ -197,7 +209,6 @@ function lto_ajax_validate_api_key() {
     }
 }
 
-
 // モデル設定の保存
 add_action('wp_ajax_lto_save_model_settings', 'lto_ajax_save_model_settings');
 
@@ -231,5 +242,3 @@ function lto_ajax_save_model_settings() {
     
     wp_send_json_success(__('Model settings saved successfully.', 'llm-traffic-optimizer'));
 }
-
-?>
