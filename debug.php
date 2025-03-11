@@ -1,3 +1,4 @@
+
 <?php
 // エラー表示を有効化
 ini_set('display_errors', 1);
@@ -48,19 +49,19 @@ foreach ($plugin_files as $file) {
         } else {
             echo " - <strong style='color:red'>構文エラーがあります:</strong> " . implode(", ", $output);
         }
-
-        // ファイルの最初の数行を表示
-        $file_content = file_get_contents($plugin_dir . '/' . $file);
-        $first_lines = explode("\n", $file_content, 5);
-        echo "<br><small>ファイル冒頭: <pre>" . htmlspecialchars(implode("\n", $first_lines)) . "...</pre></small>";
     } else {
         echo "<li>❌ {$file} - <strong style='color:red'>存在しません</strong></li>";
     }
 }
 echo "</ul>";
 
-// 関数の有無をチェック
+// 関数チェック
 echo "<h2>関数チェック</h2>";
+
+// 関数をインクルード
+include_once($plugin_dir . '/includes/openai-integration.php');
+include_once($plugin_dir . '/includes/summary-generator.php');
+
 $required_functions = [
     'lto_call_openai_api',
     'lto_generate_openai_content',
@@ -69,27 +70,104 @@ $required_functions = [
     'lto_create_summary_post'
 ];
 
-// 関数をインクルード
-include_once($plugin_dir . '/includes/openai-integration.php');
-include_once($plugin_dir . '/includes/summary-generator.php');
-
 echo "<ul>";
 foreach ($required_functions as $function) {
     if (function_exists($function)) {
         echo "<li>✅ 関数 {$function} は定義されています</li>";
     } else {
-        echo "<li>❌ 関数 {$function} は<strong style='color:red'>定義されていません</strong></li>";
+        echo "<li>❌ 関数 {$function} は定義されていません</li>";
     }
 }
 echo "</ul>";
 
-// 次のステップ
-echo "<h2>次のステップ</h2>";
-echo "<p>上記のエラーを修正した後、WordPress管理画面でプラグインを有効化してみてください。</p>";
-echo "<p>引き続きエラーが発生する場合は、WordPress環境を確認してください：</p>";
-echo "<ol>";
-echo "<li>各ファイルが正しい場所にあるか</li>";
-echo "<li>関数の定義に構文エラーがないか</li>";
-echo "<li>ファイルの読み込み順序が正しいか</li>";
-echo "</ol>";
+// WordPressモック関数
+echo "<h2>WordPress互換性テスト</h2>";
+echo "<p>注: この環境はWordPress環境ではないため、WordPress関数のモック処理を実行しています。</p>";
+
+// WordPress関数のモックを定義
+if (!function_exists('is_wp_error')) {
+    function is_wp_error($thing) {
+        return is_object($thing) && is_a($thing, 'WP_Error');
+    }
+    echo "<p>✅ is_wp_error関数をモックしました</p>";
+}
+
+if (!class_exists('WP_Error')) {
+    class WP_Error {
+        public $errors = array();
+        public $error_data = array();
+
+        public function __construct($code = '', $message = '', $data = '') {
+            $this->errors[$code][] = $message;
+            if (!empty($data)) {
+                $this->error_data[$code] = $data;
+            }
+        }
+
+        public function get_error_message($code = '') {
+            if (empty($code)) {
+                $code = $this->get_error_code();
+            }
+            $messages = $this->errors[$code] ?? array();
+            return $messages[0] ?? '';
+        }
+
+        public function get_error_code() {
+            $codes = array_keys($this->errors);
+            return $codes[0] ?? '';
+        }
+    }
+    echo "<p>✅ WP_Errorクラスをモックしました</p>";
+}
+
+if (!function_exists('get_option')) {
+    function get_option($option, $default = false) {
+        // オプションのモック
+        $options = [
+            'lto_openai_api_key' => 'sk-mock-api-key',
+            'lto_openai_model' => 'gpt-3.5-turbo',
+            'lto_temperature' => 0.7,
+            'lto_enable_auto_summaries' => 'yes'
+        ];
+        
+        return $options[$option] ?? $default;
+    }
+    echo "<p>✅ get_option関数をモックしました</p>";
+}
+
+if (!function_exists('wp_parse_args')) {
+    function wp_parse_args($args, $defaults = array()) {
+        if (is_object($args)) {
+            $r = get_object_vars($args);
+        } elseif (is_array($args)) {
+            $r =& $args;
+        } else {
+            parse_str($args, $r);
+        }
+        
+        return array_merge($defaults, $r);
+    }
+    echo "<p>✅ wp_parse_args関数をモックしました</p>";
+}
+
+// 実際のテスト実行
+echo "<h2>関数テスト</h2>";
+try {
+    echo "<p>OpenAI関数のテスト（モック環境）...</p>";
+    // 実際はAPIを呼び出さないモック
+    if (function_exists('lto_call_openai_api')) {
+        echo "<p>✅ OpenAI統合機能が正しく読み込まれています</p>";
+    } else {
+        echo "<p>❌ OpenAI統合機能が読み込まれていません</p>";
+    }
+
+    echo "<p>サマリー生成機能のテスト（モック環境）...</p>";
+    if (function_exists('lto_generate_post_summary')) {
+        echo "<p>✅ サマリー生成機能が正しく読み込まれています</p>";
+    } else {
+        echo "<p>❌ サマリー生成機能が読み込まれていません</p>";
+    }
+} catch (Exception $e) {
+    echo "<p>❌ テスト中にエラーが発生しました: " . $e->getMessage() . "</p>";
+}
 ?>
