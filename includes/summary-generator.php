@@ -41,6 +41,108 @@ if (!function_exists('wp_update_post') && defined('TESTENV')) {
     }
 }
 
+// その他のWordPress関数モック
+if (!function_exists('has_excerpt') && defined('TESTENV')) {
+    function has_excerpt($post_id) {
+        return false;
+    }
+}
+
+if (!function_exists('get_the_excerpt') && defined('TESTENV')) {
+    function get_the_excerpt($post_id) {
+        return 'テスト抜粋文';
+    }
+}
+
+if (!function_exists('wp_trim_words') && defined('TESTENV')) {
+    function wp_trim_words($text, $num_words = 55, $more = null) {
+        return substr($text, 0, 150) . '...';
+    }
+}
+
+if (!function_exists('wpautop') && defined('TESTENV')) {
+    function wpautop($text, $br = true) {
+        return '<p>' . str_replace("\n\n", '</p><p>', $text) . '</p>';
+    }
+}
+
+if (!function_exists('sanitize_text_field') && defined('TESTENV')) {
+    function sanitize_text_field($str) {
+        return strip_tags(trim($str));
+    }
+}
+
+if (!function_exists('get_cat_name') && defined('TESTENV')) {
+    function get_cat_name($cat_id) {
+        return 'テストカテゴリー';
+    }
+}
+
+if (!function_exists('get_posts') && defined('TESTENV')) {
+    function get_posts($args = null) {
+        return [
+            (object) [
+                'ID' => 1,
+                'post_title' => 'テスト投稿タイトル',
+                'post_content' => 'これはテスト投稿の内容です。',
+                'post_author' => 1
+            ]
+        ];
+    }
+}
+
+if (!function_exists('update_post_meta') && defined('TESTENV')) {
+    function update_post_meta($post_id, $meta_key, $meta_value, $prev_value = '') {
+        return true;
+    }
+}
+
+if (!function_exists('get_post_meta') && defined('TESTENV')) {
+    function get_post_meta($post_id, $key = '', $single = false) {
+        return $single ? '' : [];
+    }
+}
+
+if (!function_exists('wp_is_post_revision') && defined('TESTENV')) {
+    function wp_is_post_revision($post_id) {
+        return false;
+    }
+}
+
+if (!function_exists('wp_is_post_autosave') && defined('TESTENV')) {
+    function wp_is_post_autosave($post_id) {
+        return false;
+    }
+}
+
+if (!function_exists('date_i18n') && defined('TESTENV')) {
+    function date_i18n($format, $timestamp = false, $gmt = false) {
+        return date($format, $timestamp ?: time());
+    }
+}
+
+if (!function_exists('get_option') && defined('TESTENV') && !function_exists('get_option')) {
+    function get_option($option, $default = false) {
+        $options = [
+            'date_format' => 'Y-m-d',
+            'lto_enable_auto_summaries' => 'yes'
+        ];
+        return isset($options[$option]) ? $options[$option] : $default;
+    }
+}
+
+if (!function_exists('esc_url') && defined('TESTENV')) {
+    function esc_url($url) {
+        return $url;
+    }
+}
+
+if (!function_exists('esc_html') && defined('TESTENV')) {
+    function esc_html($text) {
+        return htmlspecialchars($text);
+    }
+}
+
 /**
  * 投稿の要約を生成する関数
  * 
@@ -420,8 +522,18 @@ function lto_create_summary_post_original($summary, $source_posts, $type = 'popu
     return $result; // 投稿ID
 }
 
+// テスト環境用のWordPress関数モック
+if (!function_exists('add_action') && defined('TESTENV')) {
+    function add_action($hook, $callback, $priority = 10, $accepted_args = 1) {
+        // テスト環境ではアクションをモック
+        return true;
+    }
+}
+
 // 新しい投稿が公開されたときに自動的に要約を生成
-add_action('publish_post', 'lto_auto_generate_summary', 10, 2);
+if (function_exists('add_action')) {
+    add_action('publish_post', 'lto_auto_generate_summary', 10, 2);
+}
 
 function lto_auto_generate_summary($post_id, $post) {
     // 自動生成が有効か確認
@@ -455,8 +567,41 @@ function lto_auto_generate_summary($post_id, $post) {
     }
 }
 
+// テスト環境用のWordPress関数モック
+if (!function_exists('check_ajax_referer') && defined('TESTENV')) {
+    function check_ajax_referer($action, $query_arg = false, $die = true) {
+        return true;
+    }
+}
+
+if (!function_exists('wp_send_json_error') && defined('TESTENV')) {
+    function wp_send_json_error($data = null, $status_code = null) {
+        echo json_encode(['success' => false, 'data' => $data]);
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            exit;
+        }
+    }
+}
+
+if (!function_exists('wp_send_json_success') && defined('TESTENV')) {
+    function wp_send_json_success($data = null, $status_code = null) {
+        echo json_encode(['success' => true, 'data' => $data]);
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            exit;
+        }
+    }
+}
+
+if (!function_exists('current_user_can') && defined('TESTENV')) {
+    function current_user_can($capability) {
+        return true; // テスト環境では常に権限あり
+    }
+}
+
 // AJAX処理：要約の生成
-add_action('wp_ajax_lto_generate_summary', 'lto_ajax_generate_summary');
+if (function_exists('add_action')) {
+    add_action('wp_ajax_lto_generate_summary', 'lto_ajax_generate_summary');
+}
 
 function lto_ajax_generate_summary() {
     // セキュリティチェック
