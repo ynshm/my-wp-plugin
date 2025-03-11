@@ -4,18 +4,47 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// プラグインパスの設定
-define('ABSPATH', dirname(__FILE__) . '/');
-define('LTO_PLUGIN_DIR', dirname(__FILE__) . '/');
-define('LTO_DEBUG', true);
+echo "<h1>PHP情報</h1>";
 
-// 主要なファイルを読み込み
-require_once LTO_PLUGIN_DIR . 'llm-traffic-optimizer.php';
+// PHPバージョン情報
+echo "<h2>PHP環境</h2>";
+echo "<p>PHP Version: " . PHP_VERSION . "</p>";
 
-echo "<h1>LLM Traffic Optimizer 関数チェック</h1>";
+// ファイル情報
+echo "<h2>ファイル情報</h2>";
+$plugin_dir = __DIR__;
+echo "<p>プラグインディレクトリ: " . $plugin_dir . "</p>";
 
-// 関数の存在チェック
-$required_functions = [
+$required_files = [
+    'llm-traffic-optimizer.php',
+    'includes/openai-integration.php',
+    'includes/summary-generator.php',
+    'includes/admin-menu.php',
+    'includes/admin-settings.php',
+    'includes/analytics-tracker.php',
+    'includes/llms-txt-generator.php'
+];
+
+echo "<ul>";
+foreach ($required_files as $file) {
+    $file_path = $plugin_dir . '/' . $file;
+    if (file_exists($file_path)) {
+        echo "<li>✅ {$file} - 存在します (サイズ: " . filesize($file_path) . " bytes)</li>";
+    } else {
+        echo "<li>❌ {$file} - 存在しません</li>";
+    }
+}
+echo "</ul>";
+
+// 関数チェック
+echo "<h2>読み込み状態と関数確認</h2>";
+
+// インクルードを試みる
+include_once('includes/openai-integration.php');
+include_once('includes/summary-generator.php');
+
+// 関数確認
+$functions = [
     'lto_call_openai_api',
     'lto_generate_openai_content',
     'lto_generate_post_summary',
@@ -23,83 +52,20 @@ $required_functions = [
     'lto_create_summary_post'
 ];
 
-echo "<ul>";
-foreach ($required_functions as $function) {
+foreach ($functions as $function) {
     if (function_exists($function)) {
-        echo "<li>✅ 関数 {$function} は定義されています</li>";
+        echo "<p>✅ 関数 {$function} は定義されています</p>";
     } else {
-        echo "<li>❌ 関数 {$function} は<strong style='color:red'>定義されていません</strong></li>";
+        echo "<p>❌ 関数 {$function} は定義されていません</p>";
     }
 }
-echo "</ul>";
 
-// ファイルパスの確認
-echo "<h2>ファイルパス</h2>";
-echo "<p>Plugin dir: " . LTO_PLUGIN_DIR . "</p>";
-echo "<p>OpenAI file: " . LTO_PLUGIN_DIR . "includes/openai-integration.php" . " - Exists: " . (file_exists(LTO_PLUGIN_DIR . "includes/openai-integration.php") ? "Yes" : "No") . "</p>";
-echo "<p>Summary file: " . LTO_PLUGIN_DIR . "includes/summary-generator.php" . " - Exists: " . (file_exists(LTO_PLUGIN_DIR . "includes/summary-generator.php") ? "Yes" : "No") . "</p>";
-
-// 次のステップの表示
-echo "<h2>次のステップ</h2>";
-echo "<p>すべての関数が正しく定義されていれば、プラグインは正常に動作するはずです。</p>";
-echo "<p>もし関数が見つからない場合は、以下を確認してください：</p>";
-echo "<ol>";
-echo "<li>各ファイルが正しい場所にあるか</li>";
-echo "<li>関数の定義に構文エラーがないか</li>";
-echo "<li>ファイルの読み込み順序が正しいか</li>";
-echo "</ol>";
-?>
-<?php
-/**
- * Function test file for LLM Traffic Optimizer
- */
-
-// エラー表示を有効化
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-echo "<h1>LLM Traffic Optimizer 関数テスト</h1>";
-
-// プラグインのパスを設定
-define('LTO_PLUGIN_DIR', dirname(__FILE__) . '/');
-
-// 必要なファイルを直接インクルード
-require_once LTO_PLUGIN_DIR . 'includes/openai-integration.php';
-require_once LTO_PLUGIN_DIR . 'includes/summary-generator.php';
-
-// 関数のチェック
-$required_functions = [
-    'lto_call_openai_api',
-    'lto_generate_openai_content',
-    'lto_generate_post_summary',
-    'lto_generate_popular_summary',
-    'lto_create_summary_post'
-];
-
-echo "<ul>";
-foreach ($required_functions as $function) {
-    if (function_exists($function)) {
-        echo "<li>✅ 関数 {$function} は定義されています</li>";
-    } else {
-        echo "<li>❌ 関数 {$function} は<strong style='color:red'>定義されていません</strong></li>";
-    }
+// WordPressがロードされているかチェック
+echo "<h2>WordPress統合</h2>";
+if (function_exists('wp_version')) {
+    echo "<p>✅ WordPressは利用可能です。バージョン: " . wp_version() . "</p>";
+} else {
+    echo "<p>❌ WordPressは利用できません。</p>";
+    echo "<p>注: この環境ではWordPressがロードされていないため、プラグインの完全なテストはできません。</p>";
 }
-echo "</ul>";
-
-// ファイルパスの確認
-echo "<h2>ファイルパス</h2>";
-echo "<p>Plugin dir: " . LTO_PLUGIN_DIR . "</p>";
-echo "<p>OpenAI file: " . LTO_PLUGIN_DIR . "includes/openai-integration.php" . " - Exists: " . (file_exists(LTO_PLUGIN_DIR . "includes/openai-integration.php") ? "Yes" : "No") . "</p>";
-echo "<p>Summary file: " . LTO_PLUGIN_DIR . "includes/summary-generator.php" . " - Exists: " . (file_exists(LTO_PLUGIN_DIR . "includes/summary-generator.php") ? "Yes" : "No") . "</p>";
-
-// 次のステップの表示
-echo "<h2>次のステップ</h2>";
-echo "<p>すべての関数が正しく定義されていれば、プラグインは正常に動作するはずです。</p>";
-echo "<p>もし関数が見つからない場合は、以下を確認してください：</p>";
-echo "<ol>";
-echo "<li>各ファイルが正しい場所にあるか</li>";
-echo "<li>関数の定義に構文エラーがないか</li>";
-echo "<li>ファイルの読み込み順序が正しいか</li>";
-echo "</ol>";
 ?>
