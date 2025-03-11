@@ -1,3 +1,4 @@
+
 <?php
 // エラー表示を有効化
 ini_set('display_errors', 1);
@@ -61,11 +62,31 @@ foreach ($functions as $function) {
 }
 
 // WordPressがロードされているかチェック
-echo "<h2>WordPress統合</h2>";
-if (function_exists('wp_version')) {
-    echo "<p>✅ WordPressは利用可能です。バージョン: " . wp_version() . "</p>";
+echo "<h2>WordPress環境チェック</h2>";
+if (defined('ABSPATH')) {
+    echo "<p>✅ WordPressが正しくロードされています</p>";
 } else {
-    echo "<p>❌ WordPressは利用できません。</p>";
-    echo "<p>注: この環境ではWordPressがロードされていないため、プラグインの完全なテストはできません。</p>";
+    echo "<p>❌ WordPressがロードされていません。このツールはWordPress環境内でのみ完全に機能します。</p>";
+    
+    echo "<h3>WordPressモック関数</h3>";
+    echo "<p>テスト用にWordPress関数をモックしています...</p>";
+    
+    // WordPressモック関数の確認
+    $wp_functions = [
+        'get_option',
+        'wp_parse_args',
+        'is_wp_error',
+        'get_post',
+        'get_permalink',
+        'wp_insert_post'
+    ];
+    
+    foreach ($wp_functions as $function) {
+        if (function_exists($function)) {
+            echo "<p>✅ {$function} 関数はモックされています</p>";
+        } else {
+            echo "<p>❌ {$function} 関数はモックされていません</p>";
+        }
+    }
 }
 ?>

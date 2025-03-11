@@ -3,26 +3,180 @@
  * 記事要約生成機能
  */
 
-// 直接アクセス禁止
-if (!defined('ABSPATH')) {
-    // 非WordPress環境での実行のために条件付きで定義
-    if (!defined('TESTENV')) {
-        define('TESTENV', true);
+// 必要なファイルをインクルード
+if (file_exists(dirname(__FILE__) . '/openai-integration.php')) {
+    require_once dirname(__FILE__) . '/openai-integration.php';
+}
+
+// テスト環境用のWordPress関数モック
+if (!function_exists('get_post') && defined('TESTENV')) {
+    function get_post($post_id = null, $output = OBJECT, $filter = 'raw') {
+        return (object) [
+            'ID' => $post_id ?? 1,
+            'post_title' => 'テスト投稿タイトル',
+            'post_content' => 'これはテスト投稿の内容です。LLMベースのAIについての解説が含まれています。',
+            'post_excerpt' => '',
+            'post_date' => '2023-01-01 12:00:00',
+            'post_status' => 'publish',
+            'post_type' => 'post',
+        ];
     }
+}
+
+if (!function_exists('get_permalink') && defined('TESTENV')) {
+    function get_permalink($post = 0) {
+        return 'https://example.com/?p=' . $post;
+    }
+}
+
+if (!function_exists('wp_insert_post') && defined('TESTENV')) {
+    function wp_insert_post($postarr, $wp_error = false) {
+        return 999; // モックID
+    }
+}
+
+if (!function_exists('wp_update_post') && defined('TESTENV')) {
+    function wp_update_post($postarr, $wp_error = false) {
+        return $postarr['ID'] ?? 999;
+    }
+}
+
+/**
+ * 投稿の要約を生成する関数
+ * 
+ * @param int $post_id 要約する投稿のID
+ * @return string|WP_Error 生成された要約またはエラー
+ */
+function lto_generate_post_summary($post_id) {
+    // 投稿データを取得
+    $post = get_post($post_id);
+
+    if (!$post) {
+        if (class_exists('WP_Error')) {
+            return new WP_Error('no_post', '指定された投稿が見つかりません。');
+        } else {
+            return 'エラー: 指定された投稿が見つかりません。';
+        }
+    }
+
+    // コンテンツを準備
+    $content = $post->post_content;
+    $title = $post->post_title;
+
+    // コンテンツが空の場合
+    if (empty($content)) {
+        if (class_exists('WP_Error')) {
+            return new WP_Error('empty_content', '投稿内容が空です。');
+        } else {
+            return 'エラー: 投稿内容が空です。';
+        }
+    }
+
+    // プロンプトを作成
+    $prompt = "以下の記事タイトルと内容を300文字程度にまとめて要約してください。要約は、AIアシスタントへの回答として適した形式にしてください。\n\nタイトル: $title\n\n内容:\n$content";
+
+    // OpenAIを使用して要約を生成
+    $summary = lto_generate_openai_content($prompt);
+
+    return $summary;
+}
+
+/**
+ * 人気投稿の要約を生成する関数
+ * 
+ * @return array|WP_Error 要約情報の配列またはエラー
+ */
+function lto_generate_popular_summary() {
+    // テスト環境ではモックデータを返す
+    if (defined('TESTENV')) {
+        $post_id = 1;
+        $post = get_post($post_id);
+        $summary = "これはテスト投稿の要約です。LLMベースのAIに関する基本概念と応用例について解説しています。";
+
+        return array(
+            'post_id' => $post_id,
+            'post_title' => $post->post_title,
+            'post_url' => get_permalink($post_id),
+            'summary' => $summary
+        );
+    }
+
+    // WordPress環境でのロジックを追加
+    // (ここでは、通常はアクセス数の多い投稿を取得するクエリを実行します)
+
+    // サンプル実装として最新の投稿を取得
+    $recent_posts = get_posts(array(
+        'numberposts' => 1,
+        'post_status' => 'publish'
+    ));
+
+    if (empty($recent_posts)) {
+        if (class_exists('WP_Error')) {
+            return new WP_Error('no_posts', '投稿が見つかりません。');
+        } else {
+            return array('error' => '投稿が見つかりません。');
+        }
+    }
+
+    $post = $recent_posts[0];
+    $post_id = $post->ID;
+
+    // 要約を生成
+    $summary = lto_generate_post_summary($post_id);
+
+    if (is_wp_error($summary)) {
+        return $summary;
+    }
+
+    return array(
+        'post_id' => $post_id,
+        'post_title' => $post->post_title,
+        'post_url' => get_permalink($post_id),
+        'summary' => $summary
+    );
+}
+
+/**
+ * 要約投稿を作成する関数
+ * 
+ * @param string $summary 要約内容
+ * @param int $original_post_id 元の投稿ID
+ * @return int|WP_Error 作成された投稿IDまたはエラー
+ */
+function lto_create_summary_post($summary, $original_post_id) {
+    $original_post = get_post($original_post_id);
+
+    if (!$original_post) {
+        if (class_exists('WP_Error')) {
+            return new WP_Error('no_post', '元の投稿が見つかりません。');
+        } else {
+            return 0;
+        }
+    }
+
+    // 要約投稿のデータを準備
+    $post_data = array(
+        'post_title' => '[要約] ' . $original_post->post_title,
+        'post_content' => $summary . "\n\n<p>元の記事: <a href=\"" . get_permalink($original_post_id) . "\">" . $original_post->post_title . "</a></p>",
+        'post_status' => 'publish',
+        'post_author' => $original_post->post_author,
+        'post_type' => 'summary', // カスタム投稿タイプを想定
+        'meta_input' => array(
+            'lto_original_post_id' => $original_post_id
+        )
+    );
+
+    // 投稿を作成
+    $post_id = wp_insert_post($post_data, true);
+
+    if (is_wp_error($post_id)) {
+        return $post_id;
+    }
+
+    return $post_id;
 }
 
 // WordPress関数のモック（非WordPress環境用）
-if (!function_exists('get_post') && defined('TESTENV')) {
-    function get_post($post_id) {
-        // モックポストオブジェクト
-        $post = new stdClass();
-        $post->post_title = 'テスト記事タイトル';
-        $post->post_content = 'これはテスト記事の内容です。要約生成テスト用のダミーコンテンツが含まれています。';
-        $post->ID = $post_id;
-        return $post;
-    }
-}
-
 if (!function_exists('wp_strip_all_tags') && defined('TESTENV')) {
     function wp_strip_all_tags($string, $remove_breaks = false) {
         $string = preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', $string);
@@ -42,7 +196,7 @@ if (!function_exists('wp_strip_all_tags') && defined('TESTENV')) {
  * @param int $post_id 要約を生成する記事のID
  * @return string|WP_Error 生成された要約またはエラー
  */
-function lto_generate_post_summary($post_id) {
+function lto_generate_post_summary_original($post_id) {
     // 記事データの取得
     $post = get_post($post_id);
 
@@ -84,13 +238,14 @@ function lto_generate_post_summary($post_id) {
     return $summary;
 }
 
+
 /**
  * 人気記事の要約を生成する関数
  * 
  * @param int $num_posts 含める記事数（デフォルト5）
  * @return string|WP_Error 生成された要約またはエラーオブジェクト
  */
-function lto_generate_popular_summary($num_posts = 5) {
+function lto_generate_popular_summary_original($num_posts = 5) {
     // テスト環境ではモックデータを返す
     if (defined('TESTENV') && TESTENV) {
         $post_id = 123;
@@ -156,7 +311,7 @@ function lto_generate_popular_summary($num_posts = 5) {
     }
 
     // サマリー記事の作成
-    $summary_post_id = lto_create_summary_post($summary, $popular_posts, 'popular');
+    $summary_post_id = lto_create_summary_post_original($summary, $popular_posts, 'popular');
 
     if (is_wp_error($summary_post_id)) {
         return $summary_post_id;
@@ -177,7 +332,7 @@ function lto_generate_popular_summary($num_posts = 5) {
  * @param string $type 要約のタイプ（'popular'、'category'など）
  * @return int|WP_Error 作成された投稿のIDまたはエラー
  */
-function lto_create_summary_post($summary, $source_posts, $type = 'popular') {
+function lto_create_summary_post_original($summary, $source_posts, $type = 'popular') {
     // テスト環境ではモックデータを返す
     if (defined('TESTENV') && TESTENV) {
         return 123; // 仮のポストID
@@ -377,7 +532,7 @@ function lto_ajax_generate_summary() {
         }
 
         // サマリー記事の作成
-        $summary_post_id = lto_create_summary_post($summary, $posts, 'category');
+        $summary_post_id = lto_create_summary_post($summary, $posts[0]->ID, 'category');
 
         if (is_wp_error($summary_post_id)) {
             wp_send_json_error($summary_post_id->get_error_message());
